@@ -1,5 +1,4 @@
 
-```lua
 local Players = game:GetService("Players")
 local RS = game:GetService("ReplicatedStorage")
 local RunService = game:GetService("RunService")
@@ -978,4 +977,3 @@ RunService.RenderStepped:Connect(function()
 end)
 
 ShowNotification("Diamond Hub", "Loaded successfully!", 3)
-```
