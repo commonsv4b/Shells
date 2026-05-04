@@ -1,83 +1,96 @@
-local Rayfield = loadstring(game:HttpGet('https://sirius.menu/rayfield'))()
+-- extracurlydiamond | Solara Compatible
 local Players = game:GetService("Players")
 local RS = game:GetService("ReplicatedStorage")
 local RunService = game:GetService("RunService")
 local HttpService = game:GetService("HttpService")
-local Network = require(RS.Modules.Communication.Network)
+
+-- Ждём загрузки модулей
+local Network = require(RS:WaitForChild("Modules"):WaitForChild("Communication"):WaitForChild("Network"))
 
 local lp = Players.LocalPlayer
-local qte = lp.PlayerGui:WaitForChild("QTE")
-local main = qte:WaitForChild("Main")
-local line = main:WaitForChild("Line")
-local bars = main:WaitForChild("Bars")
-local wayStones = workspace:WaitForChild("WayStones")
+local char = lp.Character or lp.CharacterAdded:Wait()
 
-local autoDigBarMethod = false
-local autoDigEventMethod = false
-local autoTargetDig = false
-local autoSell = false
-local autoMerchant = false
-local eventDelay = 0.5
-local sellDelay = 30
+local wayStones = workspace:WaitForChild("WayStones")
+local shellTools = RS:WaitForChild("Assets"):WaitForChild("Shells"):WaitForChild("Tools")
+local equipTools = RS:WaitForChild("Assets"):WaitForChild("Equipment"):WaitForChild("Tools")
+
+-- Состояния
+local State = {
+    autoDigBar = false,
+    autoDigEvent = false,
+    autoTargetDig = false,
+    autoSell = false,
+    autoMerchant = false,
+    autoFav = false,
+    autoFavWeight = false,
+}
+
+local Settings = {
+    eventDelay = 0.5,
+    sellDelay = 30,
+    workerCount = 3,
+}
+
 local favoritedItems = {}
 local weightFilters = {}
-local selectedWeightItem = ""
-local selectedBuyTool = ""
-local minWeightInput = 0
 local targetRarities = {}
-local workerCount = 3
 local lock = false
 
+-- Списки
 local fishList = {}
-local shellTools = RS:WaitForChild("Assets"):WaitForChild("Shells"):WaitForChild("Tools")
-for _, item in pairs(shellTools:GetChildren()) do
-    table.insert(fishList, item.Name)
+for _, v in pairs(shellTools:GetChildren()) do
+    table.insert(fishList, v.Name)
 end
 table.sort(fishList)
 
-local equipList = {}
-local equipTools = RS:WaitForChild("Assets"):WaitForChild("Equipment"):WaitForChild("Tools")
 task.wait(3)
-for _, item in pairs(equipTools:GetChildren()) do
-    table.insert(equipList, item.Name)
+local equipList = {}
+for _, v in pairs(equipTools:GetChildren()) do
+    table.insert(equipList, v.Name)
 end
 table.sort(equipList)
 
 local islandList = {}
-for _, island in pairs(wayStones:GetChildren()) do
-    table.insert(islandList, island.Name)
+for _, v in pairs(wayStones:GetChildren()) do
+    table.insert(islandList, v.Name)
 end
 table.sort(islandList)
 
+-- ==================== CORE FUNCTIONS ====================
+
+local function sendReliable(data)
+    pcall(function()
+        RS:WaitForChild("ByteNetReliable"):FireServer(buffer.fromstring(data))
+    end)
+end
+
 local function favoriteAll()
     for _, tool in pairs(lp.Backpack:GetChildren()) do
-        local fishName = tool.Name:split("_")[1]
-        if favoritedItems[fishName] then
+        local name = tool.Name:split("_")[1]
+        if favoritedItems[name] then
             pcall(function()
-                local args = {
-                    buffer.fromstring("\003\001\001"),
-                    {tool}
-                }
-                RS:WaitForChild("ByteNetReliable"):FireServer(unpack(args))
+                RS:WaitForChild("ByteNetReliable"):FireServer(
+                    buffer.fromstring("\003\001\001"), {tool}
+                )
             end)
+            task.wait(0.05)
         end
     end
 end
 
 local function favoriteByWeight()
     for _, tool in pairs(lp.Backpack:GetChildren()) do
-        local fishName = tool.Name:split("_")[1]
-        local minWeight = weightFilters[fishName]
-        if minWeight then
-            local weight = tool:GetAttribute("Weight")
-            if weight and weight >= minWeight then
+        local name = tool.Name:split("_")[1]
+        local minW = weightFilters[name]
+        if minW then
+            local w = tool:GetAttribute("Weight")
+            if w and w >= minW then
                 pcall(function()
-                    local args = {
-                        buffer.fromstring("\003\001\001"),
-                        {tool}
-                    }
-                    RS:WaitForChild("ByteNetReliable"):FireServer(unpack(args))
+                    RS:WaitForChild("ByteNetReliable"):FireServer(
+                        buffer.fromstring("\003\001\001"), {tool}
+                    )
                 end)
+                task.wait(0.05)
             end
         end
     end
@@ -86,59 +99,33 @@ end
 local function teleportTo(islandName)
     local island = wayStones:FindFirstChild(islandName)
     if island then
-        local char = lp.Character
-        if char and char:FindFirstChild("HumanoidRootPart") then
-            char.HumanoidRootPart.CFrame = island:GetModelCFrame()
+        local c = lp.Character
+        if c and c:FindFirstChild("HumanoidRootPart") then
+            c.HumanoidRootPart.CFrame = island:GetModelCFrame()
         end
     end
 end
 
-local function buyAllMerchant()
-    local buying = true
-    while buying do
-        buying = false
-        local result = Network.TravellingMerchant.queries.GetShop.invoke()
-        if result then
-            local data = HttpService:JSONDecode(result)
-            if data.isActive then
-                for item, stock in pairs(data.stock or {}) do
-                    if stock > 0 then
-                        pcall(function()
-                            local buyResult = Network.TravellingMerchant.queries.BuyItem.invoke(item)
-                            if buyResult and buyResult.success then
-                                if buyResult.remaining > 0 then
-                                    buying = true
-                                end
-                            end
-                        end)
-                        task.wait(0.1)
-                    end
-                end
-            end
-        end
-    end
-end
-
-local function isTargetRarity(rarity)
-    return targetRarities[rarity] == true
+local function doSell()
+    pcall(function()
+        Network.Merchant.packets.SellAll.send()
+    end)
 end
 
 local function spawnWorkers()
-    for i = 1, workerCount do
+    for i = 1, Settings.workerCount do
         task.spawn(function()
-            while autoTargetDig do
+            while State.autoTargetDig do
                 if not lock then
                     lock = true
                     pcall(function()
-                        local args1 = {
-                            buffer.fromstring("\016"),
-                            [3] = 16
-                        }
-                        RS:WaitForChild("ByteNetQuery"):InvokeServer(unpack(args1, 1, 3))
+                        RS:WaitForChild("ByteNetQuery"):InvokeServer(
+                            buffer.fromstring("\016"), nil, 16
+                        )
                         task.wait(0)
                         local result = Network.QTE.queries.StartQTE.invoke()
                         if result and result.rarity then
-                            if isTargetRarity(result.rarity) then
+                            if targetRarities[result.rarity] then
                                 task.wait(2)
                                 Network.QTE.packets.FinishQTE.send({
                                     state = true,
@@ -160,501 +147,828 @@ local function spawnWorkers()
     end
 end
 
-local Window = Rayfield:CreateWindow({
-    Name = "extracurlydiamond",
-    LoadingTitle = "extracurlydiamond",
-    LoadingSubtitle = "Loading...",
-    Theme = {
-        Background = Color3.fromRGB(12, 12, 28),
-        Topbar = Color3.fromRGB(18, 18, 40),
-        Shadow = Color3.fromRGB(5, 5, 15),
-        NotificationBackground = Color3.fromRGB(18, 18, 40),
-        NotificationActionsBackground = Color3.fromRGB(22, 22, 48),
-        TabBackground = Color3.fromRGB(14, 14, 32),
-        TabStroke = Color3.fromRGB(40, 40, 80),
-        TabBackgroundSelected = Color3.fromRGB(25, 25, 60),
-        TabTextColor = Color3.fromRGB(120, 120, 180),
-        SelectedTabTextColor = Color3.fromRGB(140, 160, 255),
-        ElementBackground = Color3.fromRGB(20, 20, 45),
-        ElementBackgroundHover = Color3.fromRGB(28, 28, 60),
-        SecondaryElementBackground = Color3.fromRGB(22, 22, 50),
-        ElementStroke = Color3.fromRGB(45, 45, 90),
-        SecondaryElementStroke = Color3.fromRGB(38, 38, 75),
-        SliderBackground = Color3.fromRGB(30, 30, 65),
-        SliderProgress = Color3.fromRGB(100, 120, 255),
-        SliderStroke = Color3.fromRGB(50, 50, 100),
-        ToggleBackground = Color3.fromRGB(30, 30, 65),
-        ToggleEnabled = Color3.fromRGB(100, 120, 255),
-        ToggleDisabled = Color3.fromRGB(50, 50, 90),
-        ToggleEnabledStroke = Color3.fromRGB(80, 100, 220),
-        ToggleDisabledStroke = Color3.fromRGB(40, 40, 80),
-        ToggleEnabledOuterStroke = Color3.fromRGB(60, 80, 180),
-        ToggleDisabledOuterStroke = Color3.fromRGB(30, 30, 65),
-        DropdownSelected = Color3.fromRGB(100, 120, 255),
-        DropdownUnselected = Color3.fromRGB(35, 35, 70),
-        InputBackground = Color3.fromRGB(20, 20, 45),
-        InputStroke = Color3.fromRGB(45, 45, 90),
-        PlaceholderColor = Color3.fromRGB(90, 90, 140),
-        TextColor = Color3.fromRGB(210, 215, 255),
-        SubTextColor = Color3.fromRGB(140, 145, 200),
-        PureTitleTextColor = Color3.fromRGB(160, 175, 255),
-        TitleTextColor = Color3.fromRGB(160, 175, 255),
-        ButtonColor = Color3.fromRGB(55, 60, 140),
-        ButtonStroke = Color3.fromRGB(80, 90, 180),
-        ButtonTextColor = Color3.fromRGB(220, 225, 255),
-    },
-    DisableRayfieldPrompts = true,
-    DisableBuildWarnings = true,
-})
-
-local DigTab = Window:CreateTab("Auto Dig", nil)
-
-DigTab:CreateSection("Method 1 - Bar Follow")
-
-DigTab:CreateToggle({
-    Name = "Bar Follow Line",
-    CurrentValue = false,
-    Flag = "BarFollow",
-    Callback = function(val)
-        autoDigBarMethod = val
-    end
-})
-
-DigTab:CreateSection("Method 2 - Event Fire")
-
-DigTab:CreateToggle({
-    Name = "Auto Dig (Events)",
-    CurrentValue = false,
-    Flag = "AutoDigEvent",
-    Callback = function(val)
-        autoDigEventMethod = val
-        if val then
-            task.spawn(function()
-                while autoDigEventMethod do
-                    pcall(function()
-                        local args1 = {
-                            buffer.fromstring("\016"),
-                            [3] = 16
-                        }
-                        RS:WaitForChild("ByteNetQuery"):InvokeServer(unpack(args1, 1, 3))
-                    end)
-                    task.wait(eventDelay)
-                    pcall(function()
-                        local args2 = {
-                            buffer.fromstring("*\001\002\000\002\000")
-                        }
-                        RS:WaitForChild("ByteNetReliable"):FireServer(unpack(args2))
-                    end)
-                    task.wait(0.5)
-                end
-            end)
-        end
-    end
-})
-
-DigTab:CreateSlider({
-    Name = "Event Loop Delay (s)",
-    Range = {0.1, 1},
-    Increment = 0.1,
-    CurrentValue = 0.5,
-    Flag = "EventDelay",
-    Callback = function(val)
-        eventDelay = val
-    end
-})
-
-DigTab:CreateSection("Method 3 - Targeted Dig")
-
-DigTab:CreateToggle({
-    Name = "Target: Legendary",
-    CurrentValue = false,
-    Flag = "TargetLegendary",
-    Callback = function(val)
-        targetRarities["Legendary"] = val
-    end
-})
-
-DigTab:CreateToggle({
-    Name = "Target: Mythic",
-    CurrentValue = false,
-    Flag = "TargetMythic",
-    Callback = function(val)
-        targetRarities["Mythic"] = val
-    end
-})
-
-DigTab:CreateToggle({
-    Name = "Target: Exotic",
-    CurrentValue = false,
-    Flag = "TargetExotic",
-    Callback = function(val)
-        targetRarities["Exotic"] = val
-    end
-})
-
-DigTab:CreateSlider({
-    Name = "Worker Count",
-    Range = {1, 10},
-    Increment = 1,
-    CurrentValue = 3,
-    Flag = "WorkerCount",
-    Callback = function(val)
-        workerCount = val
-    end
-})
-
-DigTab:CreateToggle({
-    Name = "Targeted Dig",
-    CurrentValue = false,
-    Flag = "TargetDig",
-    Callback = function(val)
-        autoTargetDig = val
-        if val then
-            spawnWorkers()
-        end
-    end
-})
-
-local SellTab = Window:CreateTab("Auto Sell", nil)
-
-SellTab:CreateSection("Auto Sell")
-
-SellTab:CreateToggle({
-    Name = "Auto Sell",
-    CurrentValue = false,
-    Flag = "AutoSell",
-    Callback = function(val)
-        autoSell = val
-        if val then
-            task.spawn(function()
-                while autoSell do
-                    pcall(function()
-                        Network.Merchant.packets.SellAll.send()
-                    end)
-                    task.wait(sellDelay)
-                end
-            end)
-        end
-    end
-})
-
-SellTab:CreateSlider({
-    Name = "Sell Delay (s)",
-    Range = {10, 60},
-    Increment = 5,
-    CurrentValue = 30,
-    Flag = "SellDelay",
-    Callback = function(val)
-        sellDelay = val
-    end
-})
-
-local FavTab = Window:CreateTab("Auto Favorite", nil)
-
-FavTab:CreateSection("Select Items to Favorite")
-
-for _, fishName in pairs(fishList) do
-    FavTab:CreateToggle({
-        Name = fishName,
-        CurrentValue = false,
-        Flag = "Fav_" .. fishName,
-        Callback = function(val)
-            favoritedItems[fishName] = val
-        end
-    })
-end
-
-FavTab:CreateSection("Run")
-
-FavTab:CreateButton({
-    Name = "Favorite Selected Now",
-    Callback = function()
-        favoriteAll()
-        Rayfield:Notify({
-            Title = "Auto Favorite",
-            Content = "Favorited all selected items in backpack!",
-            Duration = 2,
-        })
-    end
-})
-
-FavTab:CreateToggle({
-    Name = "Auto Favorite on Backpack Change",
-    CurrentValue = false,
-    Flag = "AutoFavToggle",
-    Callback = function(val)
-        if val then
-            lp.Backpack.ChildAdded:Connect(function()
-                task.wait(0.1)
-                favoriteAll()
-            end)
-        end
-    end
-})
-
-local FavWeightTab = Window:CreateTab("Fav by Weight", nil)
-
-FavWeightTab:CreateSection("Add Weight Filter")
-
-FavWeightTab:CreateDropdown({
-    Name = "Select Item",
-    Options = fishList,
-    CurrentOption = {fishList[1]},
-    Flag = "WeightItemDropdown",
-    Callback = function(val)
-        selectedWeightItem = val[1] or val
-    end
-})
-
-FavWeightTab:CreateInput({
-    Name = "Minimum Weight (kg)",
-    PlaceholderText = "e.g. 50",
-    RemoveTextAfterFocusLost = false,
-    Flag = "WeightInput",
-    Callback = function(val)
-        minWeightInput = tonumber(val) or 0
-    end
-})
-
-local weightListLabel = FavWeightTab:CreateParagraph({
-    Title = "Active Filters",
-    Content = "None"
-})
-
-local function updateWeightList()
-    local lines = {}
-    for name, w in pairs(weightFilters) do
-        table.insert(lines, name .. " >= " .. w .. " kg")
-    end
-    weightListLabel:Set({
-        Title = "Active Filters",
-        Content = #lines > 0 and table.concat(lines, "\n") or "None"
-    })
-end
-
-FavWeightTab:CreateButton({
-    Name = "Add Filter",
-    Callback = function()
-        if selectedWeightItem ~= "" and minWeightInput > 0 then
-            weightFilters[selectedWeightItem] = minWeightInput
-            updateWeightList()
-            Rayfield:Notify({
-                Title = "Filter Added",
-                Content = selectedWeightItem .. " >= " .. minWeightInput .. " kg",
-                Duration = 2,
-            })
-        else
-            Rayfield:Notify({
-                Title = "Error",
-                Content = "Select an item and enter a valid weight!",
-                Duration = 2,
-            })
-        end
-    end
-})
-
-FavWeightTab:CreateButton({
-    Name = "Remove Selected Filter",
-    Callback = function()
-        if weightFilters[selectedWeightItem] then
-            weightFilters[selectedWeightItem] = nil
-            updateWeightList()
-            Rayfield:Notify({
-                Title = "Filter Removed",
-                Content = selectedWeightItem .. " filter removed.",
-                Duration = 2,
-            })
-        end
-    end
-})
-
-FavWeightTab:CreateSection("Run")
-
-FavWeightTab:CreateButton({
-    Name = "Favorite by Weight Now",
-    Callback = function()
-        favoriteByWeight()
-        Rayfield:Notify({
-            Title = "Auto Favorite",
-            Content = "Favorited items matching weight filters!",
-            Duration = 2,
-        })
-    end
-})
-
-FavWeightTab:CreateToggle({
-    Name = "Auto Favorite by Weight on Backpack Change",
-    CurrentValue = false,
-    Flag = "AutoFavWeightToggle",
-    Callback = function(val)
-        if val then
-            lp.Backpack.ChildAdded:Connect(function()
-                task.wait(0.1)
-                favoriteByWeight()
-            end)
-        end
-    end
-})
-
-local BuyTab = Window:CreateTab("Buy Tool", nil)
-
-BuyTab:CreateSection("Select Tool to Buy")
-
-BuyTab:CreateDropdown({
-    Name = "Select Tool",
-    Options = equipList,
-    CurrentOption = {equipList[1]},
-    Flag = "BuyToolDropdown",
-    Callback = function(val)
-        selectedBuyTool = val[1] or val
-    end
-})
-
-BuyTab:CreateButton({
-    Name = "Buy",
-    Callback = function()
-        if selectedBuyTool ~= "" then
-            pcall(function()
-                Network.Equipment.queries.Buy.invoke(selectedBuyTool)
-            end)
-            Rayfield:Notify({
-                Title = "Buy Tool",
-                Content = "Attempted to buy: " .. selectedBuyTool,
-                Duration = 2,
-            })
-        else
-            Rayfield:Notify({
-                Title = "Error",
-                Content = "Please select a tool first!",
-                Duration = 2,
-            })
-        end
-    end
-})
-
-local TpTab = Window:CreateTab("Teleport", nil)
-
-TpTab:CreateSection("Islands")
-
-for _, name in pairs(islandList) do
-    TpTab:CreateButton({
-        Name = name,
-        Callback = function()
-            teleportTo(name)
-            Rayfield:Notify({
-                Title = "Teleport",
-                Content = "Teleporting to " .. name,
-                Duration = 2,
-            })
-        end
-    })
-end
-
-local MerchantTab = Window:CreateTab("Merchant", nil)
-
-MerchantTab:CreateSection("Travelling Merchant")
-
-MerchantTab:CreateButton({
-    Name = "Check Merchant Status",
-    Callback = function()
+local function buyAllMerchant()
+    local buying = true
+    while buying do
+        buying = false
         pcall(function()
             local result = Network.TravellingMerchant.queries.GetShop.invoke()
             if result then
                 local data = HttpService:JSONDecode(result)
                 if data.isActive then
-                    Rayfield:Notify({
-                        Title = "Merchant",
-                        Content = "Merchant is currently ACTIVE!",
-                        Duration = 3,
-                    })
-                else
-                    local timeLeft = data.nextChangeTime - os.time()
-                    local mins = math.floor(timeLeft / 60)
-                    local secs = timeLeft % 60
-                    Rayfield:Notify({
-                        Title = "Merchant",
-                        Content = "Arrives in: " .. mins .. "m " .. secs .. "s",
-                        Duration = 3,
-                    })
-                end
-            end
-        end)
-    end
-})
-
-MerchantTab:CreateButton({
-    Name = "Buy All Now",
-    Callback = function()
-        pcall(function()
-            local result = Network.TravellingMerchant.queries.GetShop.invoke()
-            if result then
-                local data = HttpService:JSONDecode(result)
-                if data.isActive then
-                    task.spawn(buyAllMerchant)
-                    Rayfield:Notify({
-                        Title = "Merchant",
-                        Content = "Buying all items!",
-                        Duration = 2,
-                    })
-                else
-                    Rayfield:Notify({
-                        Title = "Merchant",
-                        Content = "Merchant is not active!",
-                        Duration = 2,
-                    })
-                end
-            end
-        end)
-    end
-})
-
-MerchantTab:CreateToggle({
-    Name = "Auto Buy When Merchant Arrives",
-    CurrentValue = false,
-    Flag = "AutoMerchant",
-    Callback = function(val)
-        autoMerchant = val
-        if val then
-            task.spawn(function()
-                local merchantBought = false
-                while autoMerchant do
-                    pcall(function()
-                        local result = Network.TravellingMerchant.queries.GetShop.invoke()
-                        if result then
-                            local data = HttpService:JSONDecode(result)
-                            if data.isActive and not merchantBought then
-                                buyAllMerchant()
-                                merchantBought = true
-                                Rayfield:Notify({
-                                    Title = "Merchant",
-                                    Content = "Bought all merchant items!",
-                                    Duration = 3,
-                                })
-                            elseif not data.isActive then
-                                merchantBought = false
-                            end
+                    for item, stock in pairs(data.stock or {}) do
+                        if stock > 0 then
+                            pcall(function()
+                                local r = Network.TravellingMerchant.queries.BuyItem.invoke(item)
+                                if r and r.success and r.remaining > 0 then
+                                    buying = true
+                                end
+                            end)
+                            task.wait(0.1)
                         end
-                    end)
-                    task.wait(5)
+                    end
                 end
-            end)
-        end
-    end
-})
-
-RunService.RenderStepped:Connect(function()
-    if autoDigBarMethod and qte.Enabled then
-        pcall(function()
-            local rot = line.Rotation
-            bars.Bar_10.Rotation = rot
-            bars.Bar_15.Rotation = rot
-            bars.Bar_20.Rotation = rot
+            end
         end)
+    end
+end
+
+-- ==================== AUTO LOOPS ====================
+
+-- Auto Sell Loop
+task.spawn(function()
+    while true do
+        task.wait(1)
+        if State.autoSell then
+            doSell()
+            task.wait(Settings.sellDelay)
+        end
     end
 end)
 
-Rayfield:Notify({
-    Title = "extracurlydiamond",
-    Content = "Loaded successfully!",
-    Duration = 3,
-})
+-- Auto Dig Event Loop
+task.spawn(function()
+    while true do
+        task.wait(0.1)
+        if State.autoDigEvent then
+            pcall(function()
+                RS:WaitForChild("ByteNetQuery"):InvokeServer(
+                    buffer.fromstring("\016"), nil, 16
+                )
+            end)
+            task.wait(Settings.eventDelay)
+            pcall(function()
+                RS:WaitForChild("ByteNetReliable"):FireServer(
+                    buffer.fromstring("*\001\002\000\002\000")
+                )
+            end)
+            task.wait(0.5)
+        end
+    end
+end)
+
+-- Auto Merchant Loop
+task.spawn(function()
+    local bought = false
+    while true do
+        task.wait(5)
+        if State.autoMerchant then
+            pcall(function()
+                local result = Network.TravellingMerchant.queries.GetShop.invoke()
+                if result then
+                    local data = HttpService:JSONDecode(result)
+                    if data.isActive and not bought then
+                        buyAllMerchant()
+                        bought = true
+                        print("[Merchant] Bought all!")
+                    elseif not data.isActive then
+                        bought = false
+                    end
+                end
+            end)
+        end
+    end
+end)
+
+-- Auto Favorite on pickup
+lp.Backpack.ChildAdded:Connect(function()
+    task.wait(0.1)
+    if State.autoFav then favoriteAll() end
+    if State.autoFavWeight then favoriteByWeight() end
+end)
+
+-- Bar Follow
+local qteGui = lp.PlayerGui:WaitForChild("QTE", 10)
+if qteGui then
+    local main = qteGui:FindFirstChild("Main")
+    if main then
+        local line = main:FindFirstChild("Line")
+        local bars = main:FindFirstChild("Bars")
+        RunService.RenderStepped:Connect(function()
+            if State.autoDigBar and qteGui.Enabled and line and bars then
+                pcall(function()
+                    local rot = line.Rotation
+                    if bars:FindFirstChild("Bar_10") then bars.Bar_10.Rotation = rot end
+                    if bars:FindFirstChild("Bar_15") then bars.Bar_15.Rotation = rot end
+                    if bars:FindFirstChild("Bar_20") then bars.Bar_20.Rotation = rot end
+                end)
+            end
+        end)
+    end
+end
+
+-- ==================== SIMPLE GUI ====================
+
+local ScreenGui = Instance.new("ScreenGui")
+ScreenGui.Name = "extracurlydiamond"
+ScreenGui.ResetOnSpawn = false
+ScreenGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
+
+-- Безопасное добавление GUI
+local success = pcall(function()
+    ScreenGui.Parent = lp:WaitForChild("PlayerGui")
+end)
+if not success then
+    ScreenGui.Parent = game:GetService("CoreGui")
+end
+
+-- Главный фрейм
+local Main = Instance.new("Frame")
+Main.Name = "Main"
+Main.Size = UDim2.new(0, 320, 0, 500)
+Main.Position = UDim2.new(0.5, -160, 0.5, -250)
+Main.BackgroundColor3 = Color3.fromRGB(15, 15, 30)
+Main.BorderSizePixel = 0
+Main.Active = true
+Main.Draggable = true
+Main.Parent = ScreenGui
+
+Instance.new("UICorner", Main).CornerRadius = UDim.new(0, 8)
+
+-- Топбар
+local TopBar = Instance.new("Frame")
+TopBar.Size = UDim2.new(1, 0, 0, 36)
+TopBar.BackgroundColor3 = Color3.fromRGB(25, 25, 55)
+TopBar.BorderSizePixel = 0
+TopBar.Parent = Main
+
+Instance.new("UICorner", TopBar).CornerRadius = UDim.new(0, 8)
+
+local Title = Instance.new("TextLabel")
+Title.Size = UDim2.new(1, -10, 1, 0)
+Title.Position = UDim2.new(0, 10, 0, 0)
+Title.BackgroundTransparency = 1
+Title.Text = "extracurlydiamond"
+Title.TextColor3 = Color3.fromRGB(160, 175, 255)
+Title.TextSize = 16
+Title.Font = Enum.Font.GothamBold
+Title.TextXAlignment = Enum.TextXAlignment.Left
+Title.Parent = TopBar
+
+-- Кнопка закрытия
+local CloseBtn = Instance.new("TextButton")
+CloseBtn.Size = UDim2.new(0, 30, 0, 30)
+CloseBtn.Position = UDim2.new(1, -33, 0, 3)
+CloseBtn.BackgroundColor3 = Color3.fromRGB(180, 50, 50)
+CloseBtn.Text = "X"
+CloseBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+CloseBtn.TextSize = 14
+CloseBtn.Font = Enum.Font.GothamBold
+CloseBtn.BorderSizePixel = 0
+CloseBtn.Parent = TopBar
+Instance.new("UICorner", CloseBtn).CornerRadius = UDim.new(0, 6)
+CloseBtn.MouseButton1Click:Connect(function()
+    ScreenGui:Destroy()
+end)
+
+-- Минимизировать
+local MinBtn = Instance.new("TextButton")
+MinBtn.Size = UDim2.new(0, 30, 0, 30)
+MinBtn.Position = UDim2.new(1, -67, 0, 3)
+MinBtn.BackgroundColor3 = Color3.fromRGB(50, 50, 100)
+MinBtn.Text = "_"
+MinBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+MinBtn.TextSize = 14
+MinBtn.Font = Enum.Font.GothamBold
+MinBtn.BorderSizePixel = 0
+MinBtn.Parent = TopBar
+Instance.new("UICorner", MinBtn).CornerRadius = UDim.new(0, 6)
+
+local minimized = false
+local ContentFrame
+MinBtn.MouseButton1Click:Connect(function()
+    minimized = not minimized
+    if ContentFrame then
+        ContentFrame.Visible = not minimized
+    end
+    Main.Size = minimized and UDim2.new(0, 320, 0, 36) or UDim2.new(0, 320, 0, 500)
+end)
+
+-- Табы
+local TabBar = Instance.new("Frame")
+TabBar.Size = UDim2.new(1, 0, 0, 30)
+TabBar.Position = UDim2.new(0, 0, 0, 36)
+TabBar.BackgroundColor3 = Color3.fromRGB(20, 20, 45)
+TabBar.BorderSizePixel = 0
+TabBar.Parent = Main
+
+local TabLayout = Instance.new("UIListLayout")
+TabLayout.FillDirection = Enum.FillDirection.Horizontal
+TabLayout.SortOrder = Enum.SortOrder.LayoutOrder
+TabLayout.Parent = TabBar
+
+ContentFrame = Instance.new("Frame")
+ContentFrame.Name = "Content"
+ContentFrame.Size = UDim2.new(1, 0, 1, -66)
+ContentFrame.Position = UDim2.new(0, 0, 0, 66)
+ContentFrame.BackgroundTransparency = 1
+ContentFrame.Parent = Main
+
+-- ==================== TAB SYSTEM ====================
+
+local tabs = {}
+local tabContents = {}
+local activeTab = nil
+
+local tabNames = {"Dig", "Sell", "Fav", "Weight", "Buy", "TP", "Merchant"}
+
+local function createTab(name, order)
+    local btn = Instance.new("TextButton")
+    btn.Size = UDim2.new(0, 45, 1, 0)
+    btn.BackgroundColor3 = Color3.fromRGB(20, 20, 45)
+    btn.Text = name
+    btn.TextColor3 = Color3.fromRGB(120, 120, 180)
+    btn.TextSize = 10
+    btn.Font = Enum.Font.Gotham
+    btn.BorderSizePixel = 0
+    btn.LayoutOrder = order
+    btn.Parent = TabBar
+
+    local content = Instance.new("ScrollingFrame")
+    content.Size = UDim2.new(1, 0, 1, 0)
+    content.BackgroundTransparency = 1
+    content.BorderSizePixel = 0
+    content.ScrollBarThickness = 4
+    content.ScrollBarImageColor3 = Color3.fromRGB(100, 120, 255)
+    content.Visible = false
+    content.Parent = ContentFrame
+    content.AutomaticCanvasSize = Enum.AutomaticSize.Y
+    content.CanvasSize = UDim2.new(0, 0, 0, 0)
+
+    local layout = Instance.new("UIListLayout")
+    layout.Padding = UDim.new(0, 4)
+    layout.SortOrder = Enum.SortOrder.LayoutOrder
+    layout.Parent = content
+
+    local padding = Instance.new("UIPadding")
+    padding.PaddingTop = UDim.new(0, 6)
+    padding.PaddingLeft = UDim.new(0, 6)
+    padding.PaddingRight = UDim.new(0, 6)
+    padding.Parent = content
+
+    tabs[name] = btn
+    tabContents[name] = content
+
+    btn.MouseButton1Click:Connect(function()
+        if activeTab then
+            tabContents[activeTab].Visible = false
+            tabs[activeTab].BackgroundColor3 = Color3.fromRGB(20, 20, 45)
+            tabs[activeTab].TextColor3 = Color3.fromRGB(120, 120, 180)
+        end
+        activeTab = name
+        content.Visible = true
+        btn.BackgroundColor3 = Color3.fromRGB(35, 35, 80)
+        btn.TextColor3 = Color3.fromRGB(160, 175, 255)
+    end)
+
+    return content
+end
+
+for i, name in ipairs(tabNames) do
+    createTab(name, i)
+end
+
+-- Активируем первый таб
+do
+    local firstName = tabNames[1]
+    activeTab = firstName
+    tabContents[firstName].Visible = true
+    tabs[firstName].BackgroundColor3 = Color3.fromRGB(35, 35, 80)
+    tabs[firstName].TextColor3 = Color3.fromRGB(160, 175, 255)
+end
+
+-- ==================== UI HELPERS ====================
+
+local function makeToggle(parent, labelText, order, callback)
+    local row = Instance.new("Frame")
+    row.Size = UDim2.new(1, -12, 0, 32)
+    row.BackgroundColor3 = Color3.fromRGB(22, 22, 50)
+    row.BorderSizePixel = 0
+    row.LayoutOrder = order
+    row.Parent = parent
+    Instance.new("UICorner", row).CornerRadius = UDim.new(0, 6)
+
+    local lbl = Instance.new("TextLabel")
+    lbl.Size = UDim2.new(1, -50, 1, 0)
+    lbl.Position = UDim2.new(0, 8, 0, 0)
+    lbl.BackgroundTransparency = 1
+    lbl.Text = labelText
+    lbl.TextColor3 = Color3.fromRGB(210, 215, 255)
+    lbl.TextSize = 12
+    lbl.Font = Enum.Font.Gotham
+    lbl.TextXAlignment = Enum.TextXAlignment.Left
+    lbl.Parent = row
+
+    local togBtn = Instance.new("TextButton")
+    togBtn.Size = UDim2.new(0, 36, 0, 20)
+    togBtn.Position = UDim2.new(1, -44, 0.5, -10)
+    togBtn.BackgroundColor3 = Color3.fromRGB(50, 50, 90)
+    togBtn.Text = "OFF"
+    togBtn.TextColor3 = Color3.fromRGB(180, 180, 180)
+    togBtn.TextSize = 10
+    togBtn.Font = Enum.Font.GothamBold
+    togBtn.BorderSizePixel = 0
+    togBtn.Parent = row
+    Instance.new("UICorner", togBtn).CornerRadius = UDim.new(0, 10)
+
+    local enabled = false
+    togBtn.MouseButton1Click:Connect(function()
+        enabled = not enabled
+        togBtn.Text = enabled and "ON" or "OFF"
+        togBtn.BackgroundColor3 = enabled 
+            and Color3.fromRGB(80, 120, 255) 
+            or Color3.fromRGB(50, 50, 90)
+        togBtn.TextColor3 = enabled 
+            and Color3.fromRGB(255, 255, 255)
+            or Color3.fromRGB(180, 180, 180)
+        callback(enabled)
+    end)
+
+    return togBtn
+end
+
+local function makeButton(parent, labelText, order, callback)
+    local btn = Instance.new("TextButton")
+    btn.Size = UDim2.new(1, -12, 0, 32)
+    btn.BackgroundColor3 = Color3.fromRGB(55, 60, 140)
+    btn.Text = labelText
+    btn.TextColor3 = Color3.fromRGB(220, 225, 255)
+    btn.TextSize = 12
+    btn.Font = Enum.Font.GothamBold
+    btn.BorderSizePixel = 0
+    btn.LayoutOrder = order
+    btn.Parent = parent
+    Instance.new("UICorner", btn).CornerRadius = UDim.new(0, 6)
+    btn.MouseButton1Click:Connect(callback)
+    return btn
+end
+
+local function makeLabel(parent, text, order)
+    local lbl = Instance.new("TextLabel")
+    lbl.Size = UDim2.new(1, -12, 0, 22)
+    lbl.BackgroundColor3 = Color3.fromRGB(18, 18, 42)
+    lbl.Text = "  " .. text
+    lbl.TextColor3 = Color3.fromRGB(140, 160, 255)
+    lbl.TextSize = 11
+    lbl.Font = Enum.Font.GothamBold
+    lbl.TextXAlignment = Enum.TextXAlignment.Left
+    lbl.BorderSizePixel = 0
+    lbl.LayoutOrder = order
+    lbl.Parent = parent
+    Instance.new("UICorner", lbl).CornerRadius = UDim.new(0, 4)
+    return lbl
+end
+
+local function makeInput(parent, placeholder, order, callback)
+    local row = Instance.new("Frame")
+    row.Size = UDim2.new(1, -12, 0, 32)
+    row.BackgroundColor3 = Color3.fromRGB(20, 20, 45)
+    row.BorderSizePixel = 0
+    row.LayoutOrder = order
+    row.Parent = parent
+    Instance.new("UICorner", row).CornerRadius = UDim.new(0, 6)
+
+    local inp = Instance.new("TextBox")
+    inp.Size = UDim2.new(1, -10, 1, -6)
+    inp.Position = UDim2.new(0, 5, 0, 3)
+    inp.BackgroundTransparency = 1
+    inp.PlaceholderText = placeholder
+    inp.PlaceholderColor3 = Color3.fromRGB(90, 90, 140)
+    inp.Text = ""
+    inp.TextColor3 = Color3.fromRGB(210, 215, 255)
+    inp.TextSize = 12
+    inp.Font = Enum.Font.Gotham
+    inp.TextXAlignment = Enum.TextXAlignment.Left
+    inp.ClearTextOnFocus = false
+    inp.Parent = row
+
+    inp.FocusLost:Connect(function()
+        callback(inp.Text)
+    end)
+
+    return inp
+end
+
+local function makeDropdown(parent, options, order, callback)
+    local current = options[1] or ""
+    
+    local row = Instance.new("Frame")
+    row.Size = UDim2.new(1, -12, 0, 32)
+    row.BackgroundColor3 = Color3.fromRGB(22, 22, 50)
+    row.BorderSizePixel = 0
+    row.LayoutOrder = order
+    row.ClipsDescendants = false
+    row.ZIndex = 10
+    row.Parent = parent
+    Instance.new("UICorner", row).CornerRadius = UDim.new(0, 6)
+
+    local dropBtn = Instance.new("TextButton")
+    dropBtn.Size = UDim2.new(1, 0, 1, 0)
+    dropBtn.BackgroundTransparency = 1
+    dropBtn.Text = "  " .. current .. "  ▼"
+    dropBtn.TextColor3 = Color3.fromRGB(210, 215, 255)
+    dropBtn.TextSize = 11
+    dropBtn.Font = Enum.Font.Gotham
+    dropBtn.TextXAlignment = Enum.TextXAlignment.Left
+    dropBtn.ZIndex = 11
+    dropBtn.Parent = row
+
+    local listFrame = Instance.new("Frame")
+    listFrame.Size = UDim2.new(1, 0, 0, math.min(#options, 6) * 26)
+    listFrame.Position = UDim2.new(0, 0, 1, 2)
+    listFrame.BackgroundColor3 = Color3.fromRGB(25, 25, 55)
+    listFrame.BorderSizePixel = 0
+    listFrame.Visible = false
+    listFrame.ZIndex = 20
+    listFrame.ClipsDescendants = true
+    listFrame.Parent = row
+    Instance.new("UICorner", listFrame).CornerRadius = UDim.new(0, 6)
+
+    local scroll = Instance.new("ScrollingFrame")
+    scroll.Size = UDim2.new(1, 0, 1, 0)
+    scroll.BackgroundTransparency = 1
+    scroll.BorderSizePixel = 0
+    scroll.ScrollBarThickness = 3
+    scroll.AutomaticCanvasSize = Enum.AutomaticSize.Y
+    scroll.CanvasSize = UDim2.new(0, 0, 0, 0)
+    scroll.ZIndex = 21
+    scroll.Parent = listFrame
+
+    local ll = Instance.new("UIListLayout")
+    ll.SortOrder = Enum.SortOrder.LayoutOrder
+    ll.Parent = scroll
+
+    for i, opt in ipairs(options) do
+        local optBtn = Instance.new("TextButton")
+        optBtn.Size = UDim2.new(1, 0, 0, 26)
+        optBtn.BackgroundTransparency = 1
+        optBtn.Text = "  " .. opt
+        optBtn.TextColor3 = Color3.fromRGB(200, 205, 255)
+        optBtn.TextSize = 11
+        optBtn.Font = Enum.Font.Gotham
+        optBtn.TextXAlignment = Enum.TextXAlignment.Left
+        optBtn.ZIndex = 22
+        optBtn.LayoutOrder = i
+        optBtn.Parent = scroll
+
+        optBtn.MouseButton1Click:Connect(function()
+            current = opt
+            dropBtn.Text = "  " .. opt .. "  ▼"
+            listFrame.Visible = false
+            callback(opt)
+        end)
+
+        optBtn.MouseEnter:Connect(function()
+            optBtn.BackgroundTransparency = 0
+            optBtn.BackgroundColor3 = Color3.fromRGB(45, 45, 90)
+        end)
+        optBtn.MouseLeave:Connect(function()
+            optBtn.BackgroundTransparency = 1
+        end)
+    end
+
+    dropBtn.MouseButton1Click:Connect(function()
+        listFrame.Visible = not listFrame.Visible
+    end)
+
+    callback(current)
+    return row, function() return current end
+end
+
+-- ==================== DIG TAB ====================
+
+local digTab = tabContents["Dig"]
+local digOrder = 1
+
+makeLabel(digTab, "Method 1 - Bar Follow", digOrder) digOrder += 1
+makeToggle(digTab, "Bar Follow Line", digOrder, function(v)
+    State.autoDigBar = v
+end) digOrder += 1
+
+makeLabel(digTab, "Method 2 - Event Fire", digOrder) digOrder += 1
+makeToggle(digTab, "Auto Dig (Events)", digOrder, function(v)
+    State.autoDigEvent = v
+end) digOrder += 1
+
+-- Слайдер задержки (упрощённый)
+local delayRow = Instance.new("Frame")
+delayRow.Size = UDim2.new(1, -12, 0, 32)
+delayRow.BackgroundColor3 = Color3.fromRGB(22, 22, 50)
+delayRow.BorderSizePixel = 0
+delayRow.LayoutOrder = digOrder
+delayRow.Parent = digTab
+digOrder += 1
+Instance.new("UICorner", delayRow).CornerRadius = UDim.new(0, 6)
+
+local delayLbl = Instance.new("TextLabel")
+delayLbl.Size = UDim2.new(1, -80, 1, 0)
+delayLbl.Position = UDim2.new(0, 8, 0, 0)
+delayLbl.BackgroundTransparency = 1
+delayLbl.Text = "Event Delay: 0.5s"
+delayLbl.TextColor3 = Color3.fromRGB(210, 215, 255)
+delayLbl.TextSize = 11
+delayLbl.Font = Enum.Font.Gotham
+delayLbl.TextXAlignment = Enum.TextXAlignment.Left
+delayLbl.Parent = delayRow
+
+local delayInput = Instance.new("TextBox")
+delayInput.Size = UDim2.new(0, 60, 0, 22)
+delayInput.Position = UDim2.new(1, -68, 0.5, -11)
+delayInput.BackgroundColor3 = Color3.fromRGB(30, 30, 65)
+delayInput.Text = "0.5"
+delayInput.TextColor3 = Color3.fromRGB(210, 215, 255)
+delayInput.TextSize = 11
+delayInput.Font = Enum.Font.Gotham
+delayInput.BorderSizePixel = 0
+delayInput.Parent = delayRow
+Instance.new("UICorner", delayInput).CornerRadius = UDim.new(0, 4)
+delayInput.FocusLost:Connect(function()
+    local v = tonumber(delayInput.Text)
+    if v then
+        Settings.eventDelay = math.clamp(v, 0.1, 2)
+        delayLbl.Text = "Event Delay: " .. Settings.eventDelay .. "s"
+    end
+end)
+
+makeLabel(digTab, "Method 3 - Targeted Dig", digOrder) digOrder += 1
+makeToggle(digTab, "Target: Legendary", digOrder, function(v)
+    targetRarities["Legendary"] = v
+end) digOrder += 1
+makeToggle(digTab, "Target: Mythic", digOrder, function(v)
+    targetRarities["Mythic"] = v
+end) digOrder += 1
+makeToggle(digTab, "Target: Exotic", digOrder, function(v)
+    targetRarities["Exotic"] = v
+end) digOrder += 1
+
+-- Workers Input
+local wRow = Instance.new("Frame")
+wRow.Size = UDim2.new(1, -12, 0, 32)
+wRow.BackgroundColor3 = Color3.fromRGB(22, 22, 50)
+wRow.BorderSizePixel = 0
+wRow.LayoutOrder = digOrder
+wRow.Parent = digTab
+digOrder += 1
+Instance.new("UICorner", wRow).CornerRadius = UDim.new(0, 6)
+
+local wLbl = Instance.new("TextLabel")
+wLbl.Size = UDim2.new(1, -80, 1, 0)
+wLbl.Position = UDim2.new(0, 8, 0, 0)
+wLbl.BackgroundTransparency = 1
+wLbl.Text = "Workers: 3"
+wLbl.TextColor3 = Color3.fromRGB(210, 215, 255)
+wLbl.TextSize = 11
+wLbl.Font = Enum.Font.Gotham
+wLbl.TextXAlignment = Enum.TextXAlignment.Left
+wLbl.Parent = wRow
+
+local wInput = Instance.new("TextBox")
+wInput.Size = UDim2.new(0, 60, 0, 22)
+wInput.Position = UDim2.new(1, -68, 0.5, -11)
+wInput.BackgroundColor3 = Color3.fromRGB(30, 30, 65)
+wInput.Text = "3"
+wInput.TextColor3 = Color3.fromRGB(210, 215, 255)
+wInput.TextSize = 11
+wInput.Font = Enum.Font.Gotham
+wInput.BorderSizePixel = 0
+wInput.Parent = wRow
+Instance.new("UICorner", wInput).CornerRadius = UDim.new(0, 4)
+wInput.FocusLost:Connect(function()
+    local v = tonumber(wInput.Text)
+    if v then
+        Settings.workerCount = math.clamp(math.floor(v), 1, 10)
+        wLbl.Text = "Workers: " .. Settings.workerCount
+    end
+end)
+
+makeToggle(digTab, "Targeted Dig", digOrder, function(v)
+    State.autoTargetDig = v
+    if v then spawnWorkers() end
+end) digOrder += 1
+
+-- ==================== SELL TAB ====================
+
+local sellTab = tabContents["Sell"]
+local sellOrder = 1
+
+makeLabel(sellTab, "Auto Sell Settings", sellOrder) sellOrder += 1
+makeToggle(sellTab, "Auto Sell", sellOrder, function(v)
+    State.autoSell = v
+end) sellOrder += 1
+
+local sRow = Instance.new("Frame")
+sRow.Size = UDim2.new(1, -12, 0, 32)
+sRow.BackgroundColor3 = Color3.fromRGB(22, 22, 50)
+sRow.BorderSizePixel = 0
+sRow.LayoutOrder = sellOrder
+sRow.Parent = sellTab
+sellOrder += 1
+Instance.new("UICorner", sRow).CornerRadius = UDim.new(0, 6)
+
+local sLbl = Instance.new("TextLabel")
+sLbl.Size = UDim2.new(1, -80, 1, 0)
+sLbl.Position = UDim2.new(0, 8, 0, 0)
+sLbl.BackgroundTransparency = 1
+sLbl.Text = "Sell Delay: 30s"
+sLbl.TextColor3 = Color3.fromRGB(210, 215, 255)
+sLbl.TextSize = 11
+sLbl.Font = Enum.Font.Gotham
+sLbl.TextXAlignment = Enum.TextXAlignment.Left
+sLbl.Parent = sRow
+
+local sInput = Instance.new("TextBox")
+sInput.Size = UDim2.new(0, 60, 0, 22)
+sInput.Position = UDim2.new(1, -68, 0.5, -11)
+sInput.BackgroundColor3 = Color3.fromRGB(30, 30, 65)
+sInput.Text = "30"
+sInput.TextColor3 = Color3.fromRGB(210, 215, 255)
+sInput.TextSize = 11
+sInput.Font = Enum.Font.Gotham
+sInput.BorderSizePixel = 0
+sInput.Parent = sRow
+Instance.new("UICorner", sInput).CornerRadius = UDim.new(0, 4)
+sInput.FocusLost:Connect(function()
+    local v = tonumber(sInput.Text)
+    if v then
+        Settings.sellDelay = math.clamp(v, 5, 120)
+        sLbl.Text = "Sell Delay: " .. Settings.sellDelay .. "s"
+    end
+end)
+
+makeButton(sellTab, "Sell Now", sellOrder, function()
+    doSell()
+end) sellOrder += 1
+
+-- ==================== FAV TAB ====================
+
+local favTab = tabContents["Fav"]
+local favOrder = 1
+
+makeLabel(favTab, "Select Items to Favorite", favOrder) favOrder += 1
+
+for _, name in ipairs(fishList) do
+    makeToggle(favTab, name, favOrder, function(v)
+        favoritedItems[name] = v
+    end)
+    favOrder += 1
+end
+
+makeButton(favTab, "Favorite Selected Now", favOrder, function()
+    favoriteAll()
+end) favOrder += 1
+
+makeToggle(favTab, "Auto Favorite on Pickup", favOrder, function(v)
+    State.autoFav = v
+end) favOrder += 1
+
+-- ==================== WEIGHT TAB ====================
+
+local weightTab = tabContents["Weight"]
+local weightOrder = 1
+
+makeLabel(weightTab, "Add Weight Filter", weightOrder) weightOrder += 1
+
+local selectedWeightItem = fishList[1] or ""
+makeDropdown(weightTab, fishList, weightOrder, function(v)
+    selectedWeightItem = v
+end) weightOrder += 1
+
+local minWeightVal = 0
+local wInp = makeInput(weightTab, "Min Weight (kg) e.g. 50", weightOrder, function(v)
+    minWeightVal = tonumber(v) or 0
+end) weightOrder += 1
+
+local filterInfoLbl = Instance.new("TextLabel")
+filterInfoLbl.Size = UDim2.new(1, -12, 0, 50)
+filterInfoLbl.BackgroundColor3 = Color3.fromRGB(18, 18, 42)
+filterInfoLbl.Text = "Active Filters:\nNone"
+filterInfoLbl.TextColor3 = Color3.fromRGB(180, 185, 255)
+filterInfoLbl.TextSize = 10
+filterInfoLbl.Font = Enum.Font.Gotham
+filterInfoLbl.TextWrapped = true
+filterInfoLbl.BorderSizePixel = 0
+filterInfoLbl.LayoutOrder = weightOrder
+filterInfoLbl.Parent = weightTab
+weightOrder += 1
+Instance.new("UICorner", filterInfoLbl).CornerRadius = UDim.new(0, 6)
+
+local function updateFilterLabel()
+    local lines = {"Active Filters:"}
+    for n, w in pairs(weightFilters) do
+        table.insert(lines, n .. " >= " .. w .. " kg")
+    end
+    filterInfoLbl.Text = #lines > 1 and table.concat(lines, "\n") or "Active Filters:\nNone"
+end
+
+makeButton(weightTab, "Add Filter", weightOrder, function()
+    if selectedWeightItem ~= "" and minWeightVal > 0 then
+        weightFilters[selectedWeightItem] = minWeightVal
+        updateFilterLabel()
+    end
+end) weightOrder += 1
+
+makeButton(weightTab, "Remove Selected Filter", weightOrder, function()
+    weightFilters[selectedWeightItem] = nil
+    updateFilterLabel()
+end) weightOrder += 1
+
+makeButton(weightTab, "Favorite by Weight Now", weightOrder, function()
+    favoriteByWeight()
+end) weightOrder += 1
+
+makeToggle(weightTab, "Auto Fav by Weight on Pickup", weightOrder, function(v)
+    State.autoFavWeight = v
+end) weightOrder += 1
+
+-- ==================== BUY TAB ====================
+
+local buyTab = tabContents["Buy"]
+local buyOrder = 1
+
+makeLabel(buyTab, "Select Equipment to Buy", buyOrder) buyOrder += 1
+
+local selectedTool = equipList[1] or ""
+makeDropdown(buyTab, equipList, buyOrder, function(v)
+    selectedTool = v
+end) buyOrder += 1
+
+makeButton(buyTab, "Buy Selected", buyOrder, function()
+    if selectedTool ~= "" then
+        pcall(function()
+            Network.Equipment.queries.Buy.invoke(selectedTool)
+        end)
+    end
+end) buyOrder += 1
+
+-- ==================== TP TAB ====================
+
+local tpTab = tabContents["TP"]
+local tpOrder = 1
+
+makeLabel(tpTab, "Islands", tpOrder) tpOrder += 1
+
+for _, name in ipairs(islandList) do
+    makeButton(tpTab, name, tpOrder, function()
+        teleportTo(name)
+    end)
+    tpOrder += 1
+end
+
+-- ==================== MERCHANT TAB ====================
+
+local merchantTab = tabContents["Merchant"]
+local mOrder = 1
+
+makeLabel(merchantTab, "Travelling Merchant", mOrder) mOrder += 1
+
+makeButton(merchantTab, "Check Status", mOrder, function()
+    pcall(function()
+        local result = Network.TravellingMerchant.queries.GetShop.invoke()
+        if result then
+            local data = HttpService:JSONDecode(result)
+            local infoLbl = merchantTab:FindFirstChild("StatusInfo")
+            if not infoLbl then
+                infoLbl = Instance.new("TextLabel")
+                infoLbl.Name = "StatusInfo"
+                infoLbl.Size = UDim2.new(1, -12, 0, 36)
+                infoLbl.BackgroundColor3 = Color3.fromRGB(18, 18, 42)
+                infoLbl.TextColor3 = Color3.fromRGB(180, 185, 255)
+                infoLbl.TextSize = 11
+                infoLbl.Font = Enum.Font.Gotham
+                infoLbl.TextWrapped = true
+                infoLbl.BorderSizePixel = 0
+                infoLbl.LayoutOrder = 999
+                infoLbl.Parent = merchantTab
+                Instance.new("UICorner", infoLbl).CornerRadius = UDim.new(0, 6)
+            end
+            if data.isActive then
+                infoLbl.Text = "✓ Merchant is ACTIVE!"
+                infoLbl.TextColor3 = Color3.fromRGB(100, 255, 120)
+            else
+                local tl = (data.nextChangeTime or 0) - os.time()
+                local m = math.max(0, math.floor(tl / 60))
+                local s = math.max(0, tl % 60)
+                infoLbl.Text = "Arrives in: " .. m .. "m " .. s .. "s"
+                infoLbl.TextColor3 = Color3.fromRGB(255, 180, 80)
+            end
+        end
+    end)
+end) mOrder += 1
+
+makeButton(merchantTab, "Buy All Now", mOrder, function()
+    pcall(function()
+        local result = Network.TravellingMerchant.queries.GetShop.invoke()
+        if result then
+            local data = HttpService:JSONDecode(result)
+            if data.isActive then
+                task.spawn(buyAllMerchant)
+            end
+        end
+    end)
+end) mOrder += 1
+
+makeToggle(merchantTab, "Auto Buy on Merchant Arrive", mOrder, function(v)
+    State.autoMerchant = v
+end) mOrder += 1
+
+print("[extracurlydiamond] Loaded!")
