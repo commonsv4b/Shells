@@ -210,3 +210,4 @@ CloseBtn.MouseButton1Click:Connect(function() ScreenGui:Destroy() end)
 -- Tab Buttons (simple, no hover)
 local TabBar = Instance.new("Frame")
 TabBar.Size = UDim2.new(1, 0, 
+end
