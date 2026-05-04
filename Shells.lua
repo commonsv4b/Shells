@@ -1,213 +1,101 @@
--- Services
+-- Ultra-Lightweight UI for Solara
 local Players = game:GetService("Players")
 local RS = game:GetService("ReplicatedStorage")
 local RunService = game:GetService("RunService")
 local HttpService = game:GetService("HttpService")
+local UserInputService = game:GetService("UserInputService")
+
 local Network = require(RS.Modules.Communication.Network)
-
--- Player
 local lp = Players.LocalPlayer
-local qte = lp.PlayerGui:WaitForChild("QTE")
-local main = qte:WaitForChild("Main")
-local line = main:WaitForChild("Line")
-local bars = main:WaitForChild("Bars")
-local wayStones = workspace:WaitForChild("WayStones")
 
--- Variables
-local autoDigBarMethod = false
-local autoDigEventMethod = false
-local autoTargetDig = false
-local autoSell = false
-local autoMerchant = false
-local eventDelay = 0.5
-local sellDelay = 30
-local favoritedItems = {}
-local weightFilters = {}
-local selectedWeightItem = ""
-local selectedBuyTool = ""
-local minWeightInput = 0
-local targetRarities = {}
-local workerCount = 3
+-- Безопасная загрузка с таймаутом чтобы не висло
+local qte = lp.PlayerGui:WaitForChild("QTE", 10)
+local main = qte and qte:WaitForChild("Main", 10)
+local line = main and main:WaitForChild("Line", 10)
+local bars = main and main:WaitForChild("Bars", 10)
+local wayStones = workspace:WaitForChild("WayStones", 10)
+
+local autoDigBarMethod, autoDigEventMethod, autoTargetDig, autoSell, autoMerchant = false, false, false, false, false
+local eventDelay, sellDelay, workerCount = 0.5, 30, 3
+local favoritedItems, weightFilters, targetRarities = {}, {}, {}
 local lock = false
 
--- Load fish list
-local fishList = {}
-local shellTools = RS:WaitForChild("Assets"):WaitForChild("Shells"):WaitForChild("Tools")
-for _, item in pairs(shellTools:GetChildren()) do
-    table.insert(fishList, item.Name)
-end
-table.sort(fishList)
+local fishList, equipList, islandList = {}, {}, {}
+local shellTools = RS:WaitForChild("Assets"):WaitForChild("Shells"):WaitForChild("Tools", 10)
+if shellTools then for _, i in pairs(shellTools:GetChildren()) do table.insert(fishList, i.Name) end end
 
--- Load equip list
-local equipList = {}
-local equipTools = RS:WaitForChild("Assets"):WaitForChild("Equipment"):WaitForChild("Tools")
-task.wait(3)
-for _, item in pairs(equipTools:GetChildren()) do
-    table.insert(equipList, item.Name)
-end
-table.sort(equipList)
+local equipTools = RS:WaitForChild("Assets"):WaitForChild("Equipment"):WaitForChild("Tools", 10)
+if equipTools then wait(1) for _, i in pairs(equipTools:GetChildren()) do table.insert(equipList, i.Name) end end
 
--- Load island list
-local islandList = {}
-for _, island in pairs(wayStones:GetChildren()) do
-    table.insert(islandList, island.Name)
-end
-table.sort(islandList)
+if wayStones then for _, i in pairs(wayStones:GetChildren()) do table.insert(islandList, i.Name) end end
 
--- Functions
-local function favoriteAll()
-    for _, tool in pairs(lp.Backpack:GetChildren()) do
-        local fishName = tool.Name:split("_")[1]
-        if favoritedItems[fishName] then
-            pcall(function()
-                local args = {
-                    buffer.fromstring("\003\001\001"),
-                    {tool}
-                }
-                RS:WaitForChild("ByteNetReliable"):FireServer(unpack(args))
-            end)
-        end
+-- === СОЗДАНИЕ МИНИМАЛИСТИЧНОГО UI ===
+local gui = Instance.new("ScreenGui")
+gui.Name = "SolaraHub"
+gui.Parent = game.CoreGui
+
+local frame = Instance.new("Frame")
+frame.Size = UDim2.new(0, 240, 0, 400)
+frame.Position = UDim2.new(0.5, -120, 0.5, -200)
+frame.BackgroundColor3 = Color3.fromRGB(25, 25, 45)
+frame.BorderSizePixel = 1
+frame.BorderColor3 = Color3.fromRGB(80, 80, 150)
+frame.Parent = gui
+
+local title = Instance.new("TextLabel")
+title.Size = UDim2.new(1, 0, 0, 30)
+title.BackgroundTransparency = 1
+title.Text = "Diamond Hub [Solara]"
+title.TextColor3 = Color3.fromRGB(255,255,255)
+title.TextSize = 15
+title.Font = Enum.Font.SourceSansBold
+title.Parent = frame
+
+-- Перетаскивание окна
+local drag, dragStart, startPos = false, nil, nil
+title.InputBegan:Connect(function(i)
+    if i.UserInputType == Enum.UserInputType.MouseButton1 then
+        drag = true; dragStart = i.Position; startPos = frame.Position
     end
-end
-
-local function favoriteByWeight()
-    for _, tool in pairs(lp.Backpack:GetChildren()) do
-        local fishName = tool.Name:split("_")[1]
-        local minWeight = weightFilters[fishName]
-        if minWeight then
-            local weight = tool:GetAttribute("Weight")
-            if weight and weight >= minWeight then
-                pcall(function()
-                    local args = {
-                        buffer.fromstring("\003\001\001"),
-                        {tool}
-                    }
-                    RS:WaitForChild("ByteNetReliable"):FireServer(unpack(args))
-                end)
-            end
-        end
+end)
+UserInputService.InputChanged:Connect(function(i)
+    if drag and i.UserInputType == Enum.UserInputType.MouseMovement then
+        frame.Position = UDim2.new(startPos.X.Scale, startPos.X.Offset + (i.Position.X - dragStart.X), startPos.Y.Scale, startPos.Y.Offset + (i.Position.Y - dragStart.Y))
     end
+end)
+UserInputService.InputEnded:Connect(function(i) if i.UserInputType == Enum.UserInputType.MouseButton1 then drag = false end end)
+
+local content = Instance.new("ScrollingFrame")
+content.Size = UDim2.new(1, -10, 1, -40)
+content.Position = UDim2.new(0, 5, 0, 35)
+content.BackgroundTransparency = 1
+content.ScrollBarThickness = 4
+content.CanvasSize = UDim2.new(0, 0, 0, 1200) -- Фиксированный размер, чтобы не лагало
+content.Parent = frame
+
+local layout = Instance.new("UIListLayout")
+layout.Padding = UDim.new(0, 4)
+layout.Parent = content
+
+-- === ЛЁГКИЕ ФУНКЦИИ ДЛЯ СОЗДАНИЯ ЭЛЕМЕНТОВ ===
+local function addSection(txt)
+    local l = Instance.new("TextLabel")
+    l.Size = UDim2.new(1, -10, 0, 20)
+    l.BackgroundTransparency = 1
+    l.Text = txt
+    l.TextColor3 = Color3.fromRGB(150, 150, 255)
+    l.TextSize = 13
+    l.Font = Enum.Font.SourceSansBold
+    l.TextXAlignment = Enum.TextXAlignment.Left
+    l.Parent = content
 end
 
-local function teleportTo(islandName)
-    local island = wayStones:FindFirstChild(islandName)
-    if island then
-        local char = lp.Character
-        if char and char:FindFirstChild("HumanoidRootPart") then
-            char.HumanoidRootPart.CFrame = island:GetModelCFrame()
-        end
-    end
-end
-
-local function buyAllMerchant()
-    local buying = true
-    while buying do
-        buying = false
-        local result = Network.TravellingMerchant.queries.GetShop.invoke()
-        if result then
-            local data = HttpService:JSONDecode(result)
-            if data.isActive then
-                for item, stock in pairs(data.stock or {}) do
-                    if stock > 0 then
-                        pcall(function()
-                            local buyResult = Network.TravellingMerchant.queries.BuyItem.invoke(item)
-                            if buyResult and buyResult.success then
-                                if buyResult.remaining > 0 then
-                                    buying = true
-                                end
-                            end
-                        end)
-                        task.wait(0.1)
-                    end
-                end
-            end
-        end
-    end
-end
-
-local function isTargetRarity(rarity)
-    return targetRarities[rarity] == true
-end
-
-local function spawnWorkers()
-    for i = 1, workerCount do
-        task.spawn(function()
-            while autoTargetDig do
-                if not lock then
-                    lock = true
-                    pcall(function()
-                        local args1 = {
-                            buffer.fromstring("\016"),
-                            [3] = 16
-                        }
-                        RS:WaitForChild("ByteNetQuery"):InvokeServer(unpack(args1, 1, 3))
-                        task.wait(0)
-                        local result = Network.QTE.queries.StartQTE.invoke()
-                        if result and result.rarity then
-                            if isTargetRarity(result.rarity) then
-                                task.wait(2)
-                                Network.QTE.packets.FinishQTE.send({
-                                    state = true,
-                                    hits = 45,
-                                    perfects = 30
-                                })
-                                task.wait(1)
-                            else
-                                Network.QTE.packets.CancelQTE.send()
-                            end
-                        end
-                    end)
-                    lock = false
-                end
-                task.wait(0)
-            end
-        end)
-        task.wait(0.05)
-    end
-end
-
--- MINIMAL UI (only TextButton and TextLabel)
-local ScreenGui = Instance.new("ScreenGui")
-ScreenGui.Name = "MinHub"
-ScreenGui.Parent = game.CoreGui
-ScreenGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
-
--- Main Window (centered)
-local MainFrame = Instance.new("Frame")
-MainFrame.Size = UDim2.new(0, 500, 0, 350)
-MainFrame.Position = UDim2.new(0.5, -250, 0.5, -175)
-MainFrame.BackgroundColor3 = Color3.fromRGB(12, 12, 28)
-MainFrame.BorderSizePixel = 0
-MainFrame.Parent = ScreenGui
-
--- Top Bar (for title and close)
-local TopBar = Instance.new("Frame")
-TopBar.Size = UDim2.new(1, 0, 0, 35)
-TopBar.BackgroundColor3 = Color3.fromRGB(18, 18, 40)
-TopBar.BorderSizePixel = 0
-TopFrame.Parent = MainFrame
-
-local Title = Instance.new("TextLabel")
-Title.Size = UDim2.new(1, -50, 1, 0)
-Title.BackgroundTransparency = 1
-Title.Text = "DIAMOND HUB (Min)"
-Title.TextColor3 = Color3.fromRGB(210, 215, 255)
-Title.TextSize = 16
-Title.Font = Enum.Font.GothamBold
-Title.Parent = TopBar
-
-local CloseBtn = Instance.new("TextButton")
-CloseBtn.Size = UDim2.new(0, 25, 0, 25)
-CloseBtn.Position = UDim2.new(1, -35, 0.5, -12.5)
-CloseBtn.BackgroundColor3 = Color3.fromRGB(255, 50, 50)
-CloseBtn.Text = "X"
-CloseBtn.TextColor3 = Color3.new(255, 255, 255)
-CloseBtn.TextSize = 12
-CloseBtn.Font = Enum.Font.GothamBold
-CloseBtn.Parent = TopBar
-CloseBtn.MouseButton1Click:Connect(function() ScreenGui:Destroy() end)
-
--- Tab Buttons (simple, no hover)
-local TabBar = Instance.new("Frame")
-TabBar.Size = UDim2.new(1, 0, 
-end
+local function makeToggle(txt, def, cb)
+    local b = Instance.new("TextButton")
+    b.Size = UDim2.new(1, -10, 0, 28)
+    b.BackgroundColor3 = def and Color3.fromRGB(0,120,0) or Color3.fromRGB(120,0,0)
+    b.Text = (def and "[ON] " or "[OFF] ") .. txt
+    b.TextColor3 = Color3.fromRGB(255,255,255)
+    b.TextSize = 13
+    b.Font = Enum.Font.SourceSans
+    b.Parent 
