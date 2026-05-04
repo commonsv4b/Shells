@@ -1,10 +1,7 @@
-
 local Players = game:GetService("Players")
 local RS = game:GetService("ReplicatedStorage")
 local RunService = game:GetService("RunService")
 local HttpService = game:GetService("HttpService")
-local TweenService = game:GetService("TweenService")
-local UserInputService = game:GetService("UserInputService")
 local Network = require(RS.Modules.Communication.Network)
 
 local lp = Players.LocalPlayer
@@ -14,7 +11,7 @@ local line = main:WaitForChild("Line")
 local bars = main:WaitForChild("Bars")
 local wayStones = workspace:WaitForChild("WayStones")
 
--- Variables (сохранены все оригинальные)
+-- Все переменные (оригинал)
 local autoDigBarMethod = false
 local autoDigEventMethod = false
 local autoTargetDig = false
@@ -31,7 +28,7 @@ local targetRarities = {}
 local workerCount = 3
 local lock = false
 
--- Data loading (оригинальный код)
+-- Загрузка данных
 local fishList = {}
 local shellTools = RS:WaitForChild("Assets"):WaitForChild("Shells"):WaitForChild("Tools")
 for _, item in pairs(shellTools:GetChildren()) do
@@ -53,7 +50,7 @@ for _, island in pairs(wayStones:GetChildren()) do
 end
 table.sort(islandList)
 
--- Functions (сохранены все оригинальные функции)
+-- Функции (все оригинальные)
 local function favoriteAll()
     for _, tool in pairs(lp.Backpack:GetChildren()) do
         local fishName = tool.Name:split("_")[1]
@@ -165,552 +162,203 @@ local function spawnWorkers()
     end
 end
 
--- CUSTOM UI SYSTEM
+-- ===== ПРОСТОЙ UI ДЛЯ SOLARA (без TweenService, без анимаций) =====
+
 local ScreenGui = Instance.new("ScreenGui")
 ScreenGui.Name = "DiamondHub"
 ScreenGui.Parent = game.CoreGui
 ScreenGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
 
--- Main Frame
+-- Основное окно
 local MainFrame = Instance.new("Frame")
-MainFrame.Name = "Main"
 MainFrame.Size = UDim2.new(0, 700, 0, 450)
 MainFrame.Position = UDim2.new(0.5, -350, 0.5, -225)
-MainFrame.BackgroundColor3 = Color3.fromRGB(13, 13, 23)
+MainFrame.BackgroundColor3 = Color3.fromRGB(12, 12, 28)
 MainFrame.BorderSizePixel = 0
 MainFrame.Parent = ScreenGui
 
-local MainCorner = Instance.new("UICorner")
-MainCorner.CornerRadius = UDim.new(0, 12)
-MainCorner.Parent = MainFrame
-
--- Shadow
-local Shadow = Instance.new("ImageLabel")
-Shadow.Name = "Shadow"
-Shadow.AnchorPoint = Vector2.new(0.5, 0.5)
-Shadow.BackgroundTransparency = 1
-Shadow.Position = UDim2.new(0.5, 0, 0.5, 0)
-Shadow.Size = UDim2.new(1, 40, 1, 40)
-Shadow.ZIndex = -1
-Shadow.Image = "rbxassetid://5554236805"
-Shadow.ImageColor3 = Color3.fromRGB(0, 0, 0)
-Shadow.ImageTransparency = 0.4
-Shadow.ScaleType = Enum.ScaleType.Slice
-Shadow.SliceCenter = Rect.new(23, 23, 277, 277)
-Shadow.Parent = MainFrame
-
--- Top Bar
 local TopBar = Instance.new("Frame")
-TopBar.Name = "TopBar"
-TopBar.Size = UDim2.new(1, 0, 0, 50)
-TopBar.BackgroundColor3 = Color3.fromRGB(18, 18, 32)
+TopBar.Size = UDim2.new(1, 0, 0, 40)
+TopBar.BackgroundColor3 = Color3.fromRGB(18, 18, 40)
 TopBar.BorderSizePixel = 0
 TopBar.Parent = MainFrame
 
-local TopBarCorner = Instance.new("UICorner")
-TopBarCorner.CornerRadius = UDim.new(0, 12)
-TopBarCorner.Parent = TopBar
-
 local Title = Instance.new("TextLabel")
-Title.Name = "Title"
-Title.Size = UDim2.new(1, -100, 1, 0)
-Title.Position = UDim2.new(0, 20, 0, 0)
+Title.Size = UDim2.new(1, 0, 1, 0)
 Title.BackgroundTransparency = 1
-Title.Text = "DIAMOND HUB"
-Title.TextColor3 = Color3.fromRGB(220, 220, 255)
-Title.TextSize = 20
+Title.Text = "DIAMOND HUB (Solara)"
+Title.TextColor3 = Color3.fromRGB(210, 215, 255)
+Title.TextSize = 18
 Title.Font = Enum.Font.GothamBold
-Title.TextXAlignment = Enum.TextXAlignment.Left
 Title.Parent = TopBar
 
 local CloseBtn = Instance.new("TextButton")
-CloseBtn.Name = "Close"
 CloseBtn.Size = UDim2.new(0, 30, 0, 30)
 CloseBtn.Position = UDim2.new(1, -40, 0.5, -15)
-CloseBtn.BackgroundColor3 = Color3.fromRGB(255, 70, 70)
+CloseBtn.BackgroundColor3 = Color3.fromRGB(255, 50, 50)
 CloseBtn.Text = "X"
 CloseBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
 CloseBtn.TextSize = 14
-CloseBtn.Font = Enum.Font.GothamBold
 CloseBtn.Parent = TopBar
-
-local CloseCorner = Instance.new("UICorner")
-CloseCorner.CornerRadius = UDim.new(0, 8)
-CloseCorner.Parent = CloseBtn
-
--- Sidebar
-local Sidebar = Instance.new("Frame")
-Sidebar.Name = "Sidebar"
-Sidebar.Size = UDim2.new(0, 160, 1, -50)
-Sidebar.Position = UDim2.new(0, 0, 0, 50)
-Sidebar.BackgroundColor3 = Color3.fromRGB(16, 16, 28)
-Sidebar.BorderSizePixel = 0
-Sidebar.Parent = MainFrame
-
-local SidebarCorner = Instance.new("UICorner")
-SidebarCorner.CornerRadius = UDim.new(0, 12)
-SidebarCorner.Parent = Sidebar
-
--- Content Container
-local ContentContainer = Instance.new("Frame")
-ContentContainer.Name = "Content"
-ContentContainer.Size = UDim2.new(1, -160, 1, -50)
-ContentContainer.Position = UDim2.new(0, 160, 0, 50)
-ContentContainer.BackgroundTransparency = 1
-ContentContainer.Parent = MainFrame
-
--- Notification System
-local function ShowNotification(title, text, duration)
-    local NotifFrame = Instance.new("Frame")
-    NotifFrame.Size = UDim2.new(0, 250, 0, 80)
-    NotifFrame.Position = UDim2.new(1, 20, 1, -100)
-    NotifFrame.BackgroundColor3 = Color3.fromRGB(25, 25, 45)
-    NotifFrame.BorderSizePixel = 0
-    NotifFrame.Parent = ScreenGui
-    
-    local NotifCorner = Instance.new("UICorner")
-    NotifCorner.CornerRadius = UDim.new(0, 8)
-    NotifCorner.Parent = NotifFrame
-    
-    local NotifTitle = Instance.new("TextLabel")
-    NotifTitle.Size = UDim2.new(1, -20, 0, 25)
-    NotifTitle.Position = UDim2.new(0, 10, 0, 10)
-    NotifTitle.BackgroundTransparency = 1
-    NotifTitle.Text = title
-    NotifTitle.TextColor3 = Color3.fromRGB(140, 160, 255)
-    NotifTitle.TextSize = 16
-    NotifTitle.Font = Enum.Font.GothamBold
-    NotifTitle.TextXAlignment = Enum.TextXAlignment.Left
-    NotifTitle.Parent = NotifFrame
-    
-    local NotifText = Instance.new("TextLabel")
-    NotifText.Size = UDim2.new(1, -20, 0, 40)
-    NotifText.Position = UDim2.new(0, 10, 0, 35)
-    NotifText.BackgroundTransparency = 1
-    NotifText.Text = text
-    NotifText.TextColor3 = Color3.fromRGB(200, 200, 220)
-    NotifText.TextSize = 14
-    NotifText.Font = Enum.Font.Gotham
-    NotifText.TextXAlignment = Enum.TextXAlignment.Left
-    NotifText.TextWrapped = true
-    NotifText.Parent = NotifFrame
-    
-    TweenService:Create(NotifFrame, TweenInfo.new(0.5, Enum.EasingStyle.Quart), {Position = UDim2.new(1, -270, 1, -100)}):Play()
-    
-    task.delay(duration or 3, function()
-        TweenService:Create(NotifFrame, TweenInfo.new(0.5, Enum.EasingStyle.Quart), {Position = UDim2.new(1, 20, 1, -100)}):Play()
-        task.wait(0.5)
-        NotifFrame:Destroy()
-    end)
-end
-
--- Tab System
-local Tabs = {}
-local CurrentTab = nil
-
-local function CreateTab(name, icon)
-    local TabBtn = Instance.new("TextButton")
-    TabBtn.Size = UDim2.new(1, -20, 0, 40)
-    TabBtn.Position = UDim2.new(0, 10, 0, 10 + (#Tabs * 50))
-    TabBtn.BackgroundColor3 = Color3.fromRGB(30, 30, 50)
-    TabBtn.Text = "  " .. name
-    TabBtn.TextColor3 = Color3.fromRGB(180, 180, 200)
-    TabBtn.TextSize = 14
-    TabBtn.Font = Enum.Font.GothamSemibold
-    TabBtn.TextXAlignment = Enum.TextXAlignment.Left
-    TabBtn.Parent = Sidebar
-    
-    local TabCorner = Instance.new("UICorner")
-    TabCorner.CornerRadius = UDim.new(0, 8)
-    TabCorner.Parent = TabBtn
-    
-    local TabContent = Instance.new("ScrollingFrame")
-    TabContent.Name = name
-    TabContent.Size = UDim2.new(1, -20, 1, -20)
-    TabContent.Position = UDim2.new(0, 10, 0, 10)
-    TabContent.BackgroundTransparency = 1
-    TabContent.ScrollBarThickness = 4
-    TabContent.ScrollBarImageColor3 = Color3.fromRGB(60, 60, 100)
-    TabContent.Visible = false
-    TabContent.Parent = ContentContainer
-    
-    local ListLayout = Instance.new("UIListLayout")
-    ListLayout.Padding = UDim.new(0, 12)
-    ListLayout.Parent = TabContent
-    
-    ListLayout:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(function()
-        TabContent.CanvasSize = UDim2.new(0, 0, 0, ListLayout.AbsoluteContentSize.Y + 20)
-    end)
-    
-    table.insert(Tabs, {Button = TabBtn, Content = TabContent})
-    
-    TabBtn.MouseButton1Click:Connect(function()
-        if CurrentTab then
-            CurrentTab.Content.Visible = false
-            TweenService:Create(CurrentTab.Button, TweenInfo.new(0.2), {BackgroundColor3 = Color3.fromRGB(30, 30, 50), TextColor3 = Color3.fromRGB(180, 180, 200)}):Play()
-        end
-        CurrentTab = {Button = TabBtn, Content = TabContent}
-        TabContent.Visible = true
-        TweenService:Create(TabBtn, TweenInfo.new(0.2), {BackgroundColor3 = Color3.fromRGB(60, 80, 180), TextColor3 = Color3.fromRGB(255, 255, 255)}):Play()
-    end)
-    
-    return TabContent
-end
-
--- UI Elements
-local function CreateSection(parent, text)
-    local Section = Instance.new("TextLabel")
-    Section.Size = UDim2.new(1, 0, 0, 30)
-    Section.BackgroundTransparency = 1
-    Section.Text = text
-    Section.TextColor3 = Color3.fromRGB(140, 160, 255)
-    Section.TextSize = 14
-    Section.Font = Enum.Font.GothamBold
-    Section.TextXAlignment = Enum.TextXAlignment.Left
-    Section.Parent = parent
-    return Section
-end
-
-local function CreateToggle(parent, text, default, callback)
-    local Frame = Instance.new("Frame")
-    Frame.Size = UDim2.new(1, 0, 0, 45)
-    Frame.BackgroundColor3 = Color3.fromRGB(22, 22, 38)
-    Frame.Parent = parent
-    
-    local Corner = Instance.new("UICorner")
-    Corner.CornerRadius = UDim.new(0, 8)
-    Corner.Parent = Frame
-    
-    local Label = Instance.new("TextLabel")
-    Label.Size = UDim2.new(1, -70, 1, 0)
-    Label.Position = UDim2.new(0, 15, 0, 0)
-    Label.BackgroundTransparency = 1
-    Label.Text = text
-    Label.TextColor3 = Color3.fromRGB(220, 220, 240)
-    Label.TextSize = 14
-    Label.Font = Enum.Font.Gotham
-    Label.TextXAlignment = Enum.TextXAlignment.Left
-    Label.Parent = Frame
-    
-    local ToggleBg = Instance.new("TextButton")
-    ToggleBg.Size = UDim2.new(0, 44, 0, 24)
-    ToggleBg.Position = UDim2.new(1, -59, 0.5, -12)
-    ToggleBg.BackgroundColor3 = default and Color3.fromRGB(80, 120, 255) or Color3.fromRGB(50, 50, 70)
-    ToggleBg.Text = ""
-    ToggleBg.AutoButtonColor = false
-    ToggleBg.Parent = Frame
-    
-    local ToggleCorner = Instance.new("UICorner")
-    ToggleCorner.CornerRadius = UDim.new(1, 0)
-    ToggleCorner.Parent = ToggleBg
-    
-    local Circle = Instance.new("Frame")
-    Circle.Size = UDim2.new(0, 18, 0, 18)
-    Circle.Position = default and UDim2.new(0, 23, 0.5, -9) or UDim2.new(0, 3, 0.5, -9)
-    Circle.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
-    Circle.Parent = ToggleBg
-    
-    local CircleCorner = Instance.new("UICorner")
-    CircleCorner.CornerRadius = UDim.new(1, 0)
-    CircleCorner.Parent = Circle
-    
-    local Enabled = default
-    
-    ToggleBg.MouseButton1Click:Connect(function()
-        Enabled = not Enabled
-        TweenService:Create(ToggleBg, TweenInfo.new(0.2), {BackgroundColor3 = Enabled and Color3.fromRGB(80, 120, 255) or Color3.fromRGB(50, 50, 70)}):Play()
-        TweenService:Create(Circle, TweenInfo.new(0.2), {Position = Enabled and UDim2.new(0, 23, 0.5, -9) or UDim2.new(0, 3, 0.5, -9)}):Play()
-        callback(Enabled)
-    end)
-    
-    return Frame
-end
-
-local function CreateSlider(parent, text, min, max, default, increment, callback)
-    local Frame = Instance.new("Frame")
-    Frame.Size = UDim2.new(1, 0, 0, 70)
-    Frame.BackgroundColor3 = Color3.fromRGB(22, 22, 38)
-    Frame.Parent = parent
-    
-    local Corner = Instance.new("UICorner")
-    Corner.CornerRadius = UDim.new(0, 8)
-    Corner.Parent = Frame
-    
-    local Label = Instance.new("TextLabel")
-    Label.Size = UDim2.new(1, -100, 0, 30)
-    Label.Position = UDim2.new(0, 15, 0, 5)
-    Label.BackgroundTransparency = 1
-    Label.Text = text
-    Label.TextColor3 = Color3.fromRGB(220, 220, 240)
-    Label.TextSize = 14
-    Label.Font = Enum.Font.Gotham
-    Label.TextXAlignment = Enum.TextXAlignment.Left
-    Label.Parent = Frame
-    
-    local ValueLabel = Instance.new("TextLabel")
-    ValueLabel.Size = UDim2.new(0, 80, 0, 30)
-    ValueLabel.Position = UDim2.new(1, -95, 0, 5)
-    ValueLabel.BackgroundTransparency = 1
-    ValueLabel.Text = tostring(default)
-    ValueLabel.TextColor3 = Color3.fromRGB(140, 160, 255)
-    ValueLabel.TextSize = 14
-    ValueLabel.Font = Enum.Font.GothamBold
-    ValueLabel.TextXAlignment = Enum.TextXAlignment.Right
-    ValueLabel.Parent = Frame
-    
-    local SliderBg = Instance.new("Frame")
-    SliderBg.Size = UDim2.new(1, -30, 0, 6)
-    SliderBg.Position = UDim2.new(0, 15, 0, 45)
-    SliderBg.BackgroundColor3 = Color3.fromRGB(40, 40, 60)
-    SliderBg.BorderSizePixel = 0
-    SliderBg.Parent = Frame
-    
-    local SliderBgCorner = Instance.new("UICorner")
-    SliderBgCorner.CornerRadius = UDim.new(0, 3)
-    SliderBgCorner.Parent = SliderBg
-    
-    local Fill = Instance.new("Frame")
-    Fill.Size = UDim2.new((default - min) / (max - min), 0, 1, 0)
-    Fill.BackgroundColor3 = Color3.fromRGB(100, 120, 255)
-    Fill.BorderSizePixel = 0
-    Fill.Parent = SliderBg
-    
-    local FillCorner = Instance.new("UICorner")
-    FillCorner.CornerRadius = UDim.new(0, 3)
-    FillCorner.Parent = Fill
-    
-    local DragBtn = Instance.new("TextButton")
-    DragBtn.Size = UDim2.new(0, 16, 0, 16)
-    DragBtn.Position = UDim2.new((default - min) / (max - min), -8, 0.5, -8)
-    DragBtn.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
-    DragBtn.Text = ""
-    DragBtn.Parent = SliderBg
-    
-    local DragCorner = Instance.new("UICorner")
-    DragCorner.CornerRadius = UDim.new(1, 0)
-    DragCorner.Parent = DragBtn
-    
-    local Dragging = false
-    
-    local function Update(input)
-        local pos = math.clamp((input.Position.X - SliderBg.AbsolutePosition.X) / SliderBg.AbsoluteSize.X, 0, 1)
-        local val = math.floor((min + (max - min) * pos) / increment + 0.5) * increment
-        val = math.clamp(val, min, max)
-        
-        Fill.Size = UDim2.new(pos, 0, 1, 0)
-        DragBtn.Position = UDim2.new(pos, -8, 0.5, -8)
-        ValueLabel.Text = tostring(val)
-        callback(val)
-    end
-    
-    DragBtn.InputBegan:Connect(function(input)
-        if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
-            Dragging = true
-        end
-    end)
-    
-    UserInputService.InputChanged:Connect(function(input)
-        if Dragging and (input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch) then
-            Update(input)
-        end
-    end)
-    
-    UserInputService.InputEnded:Connect(function(input)
-        if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
-            Dragging = false
-        end
-    end)
-    
-    return Frame
-end
-
-local function CreateButton(parent, text, callback)
-    local Btn = Instance.new("TextButton")
-    Btn.Size = UDim2.new(1, 0, 0, 40)
-    Btn.BackgroundColor3 = Color3.fromRGB(60, 80, 200)
-    Btn.Text = text
-    Btn.TextColor3 = Color3.fromRGB(255, 255, 255)
-    Btn.TextSize = 14
-    Btn.Font = Enum.Font.GothamSemibold
-    Btn.Parent = parent
-    
-    local Corner = Instance.new("UICorner")
-    Corner.CornerRadius = UDim.new(0, 8)
-    Corner.Parent = Btn
-    
-    Btn.MouseButton1Click:Connect(function()
-        TweenService:Create(Btn, TweenInfo.new(0.1), {BackgroundColor3 = Color3.fromRGB(80, 100, 255)}):Play()
-        task.wait(0.1)
-        TweenService:Create(Btn, TweenInfo.new(0.1), {BackgroundColor3 = Color3.fromRGB(60, 80, 200)}):Play()
-        callback()
-    end)
-    
-    return Btn
-end
-
-local function CreateDropdown(parent, text, options, callback)
-    local Frame = Instance.new("Frame")
-    Frame.Size = UDim2.new(1, 0, 0, 45)
-    Frame.BackgroundColor3 = Color3.fromRGB(22, 22, 38)
-    Frame.ClipsDescendants = true
-    Frame.Parent = parent
-    
-    local Corner = Instance.new("UICorner")
-    Corner.CornerRadius = UDim.new(0, 8)
-    Corner.Parent = Frame
-    
-    local Label = Instance.new("TextLabel")
-    Label.Size = UDim2.new(1, -20, 0, 45)
-    Label.Position = UDim2.new(0, 15, 0, 0)
-    Label.BackgroundTransparency = 1
-    Label.Text = text .. ": " .. (options[1] or "None")
-    Label.TextColor3 = Color3.fromRGB(220, 220, 240)
-    Label.TextSize = 14
-    Label.Font = Enum.Font.Gotham
-    Label.TextXAlignment = Enum.TextXAlignment.Left
-    Label.Parent = Frame
-    
-    local Arrow = Instance.new("TextLabel")
-    Arrow.Size = UDim2.new(0, 30, 0, 45)
-    Arrow.Position = UDim2.new(1, -40, 0, 0)
-    Arrow.BackgroundTransparency = 1
-    Arrow.Text = "▼"
-    Arrow.TextColor3 = Color3.fromRGB(140, 140, 160)
-    Arrow.TextSize = 12
-    Arrow.Font = Enum.Font.Gotham
-    Arrow.Parent = Frame
-    
-    local Expanded = false
-    local Selected = options[1]
-    
-    local OptionsFrame = Instance.new("Frame")
-    OptionsFrame.Size = UDim2.new(1, 0, 0, #options * 35)
-    OptionsFrame.Position = UDim2.new(0, 0, 0, 45)
-    OptionsFrame.BackgroundTransparency = 1
-    OptionsFrame.Parent = Frame
-    
-    for i, opt in ipairs(options) do
-        local OptBtn = Instance.new("TextButton")
-        OptBtn.Size = UDim2.new(1, -20, 0, 30)
-        OptBtn.Position = UDim2.new(0, 10, 0, (i-1) * 35 + 5)
-        OptBtn.BackgroundColor3 = Color3.fromRGB(35, 35, 55)
-        OptBtn.Text = opt
-        OptBtn.TextColor3 = Color3.fromRGB(200, 200, 220)
-        OptBtn.TextSize = 13
-        OptBtn.Font = Enum.Font.Gotham
-        OptBtn.Parent = OptionsFrame
-        
-        local OptCorner = Instance.new("UICorner")
-        OptCorner.CornerRadius = UDim.new(0, 6)
-        OptCorner.Parent = OptBtn
-        
-        OptBtn.MouseButton1Click:Connect(function()
-            Selected = opt
-            Label.Text = text .. ": " .. opt
-            Expanded = false
-            TweenService:Create(Frame, TweenInfo.new(0.2), {Size = UDim2.new(1, 0, 0, 45)}):Play()
-            TweenService:Create(Arrow, TweenInfo.new(0.2), {Rotation = 0}):Play()
-            callback(Selected)
-        end)
-    end
-    
-    Frame.InputBegan:Connect(function(input)
-        if input.UserInputType == Enum.UserInputType.MouseButton1 then
-            Expanded = not Expanded
-            local targetSize = Expanded and UDim2.new(1, 0, 0, 45 + #options * 35) or UDim2.new(1, 0, 0, 45)
-            TweenService:Create(Frame, TweenInfo.new(0.2), {Size = targetSize}):Play()
-            TweenService:Create(Arrow, TweenInfo.new(0.2), {Rotation = Expanded and 180 or 0}):Play()
-        end
-    end)
-    
-    return Frame
-end
-
-local function CreateInput(parent, text, placeholder, callback)
-    local Frame = Instance.new("Frame")
-    Frame.Size = UDim2.new(1, 0, 0, 70)
-    Frame.BackgroundColor3 = Color3.fromRGB(22, 22, 38)
-    Frame.Parent = parent
-    
-    local Corner = Instance.new("UICorner")
-    Corner.CornerRadius = UDim.new(0, 8)
-    Corner.Parent = Frame
-    
-    local Label = Instance.new("TextLabel")
-    Label.Size = UDim2.new(1, -20, 0, 30)
-    Label.Position = UDim2.new(0, 15, 0, 5)
-    Label.BackgroundTransparency = 1
-    Label.Text = text
-    Label.TextColor3 = Color3.fromRGB(220, 220, 240)
-    Label.TextSize = 14
-    Label.Font = Enum.Font.Gotham
-    Label.TextXAlignment = Enum.TextXAlignment.Left
-    Label.Parent = Frame
-    
-    local InputBox = Instance.new("TextBox")
-    InputBox.Size = UDim2.new(1, -30, 0, 30)
-    InputBox.Position = UDim2.new(0, 15, 0, 35)
-    InputBox.BackgroundColor3 = Color3.fromRGB(35, 35, 55)
-    InputBox.Text = ""
-    InputBox.PlaceholderText = placeholder
-    InputBox.TextColor3 = Color3.fromRGB(255, 255, 255)
-    InputBox.PlaceholderColor3 = Color3.fromRGB(120, 120, 140)
-    InputBox.TextSize = 14
-    InputBox.Font = Enum.Font.Gotham
-    InputBox.ClearTextOnFocus = false
-    InputBox.Parent = Frame
-    
-    local InputCorner = Instance.new("UICorner")
-    InputCorner.CornerRadius = UDim.new(0, 6)
-    InputCorner.Parent = InputBox
-    
-    InputBox.FocusLost:Connect(function()
-        callback(InputBox.Text)
-    end)
-    
-    return Frame
-end
-
--- Draggable
-local Dragging = false
-local DragStart = nil
-local StartPos = nil
-
-TopBar.InputBegan:Connect(function(input)
-    if input.UserInputType == Enum.UserInputType.MouseButton1 then
-        Dragging = true
-        DragStart = input.Position
-        StartPos = MainFrame.Position
-    end
-end)
-
-UserInputService.InputChanged:Connect(function(input)
-    if Dragging and input.UserInputType == Enum.UserInputType.MouseMovement then
-        local delta = input.Position - DragStart
-        MainFrame.Position = UDim2.new(StartPos.X.Scale, StartPos.X.Offset + delta.X, StartPos.Y.Scale, StartPos.Y.Offset + delta.Y)
-    end
-end)
-
-UserInputService.InputEnded:Connect(function(input)
-    if input.UserInputType == Enum.UserInputType.MouseButton1 then
-        Dragging = false
-    end
-end)
-
 CloseBtn.MouseButton1Click:Connect(function()
     ScreenGui:Destroy()
 end)
 
--- BUILDING TABS
--- Auto Dig Tab
-local DigTab = CreateTab("Auto Dig")
-CreateSection(DigTab, "Method 1 - Bar Follow")
-CreateToggle(DigTab, "Bar Follow Line", false, function(val)
-    autoDigBarMethod = val
-end)
+-- Вкладки (просто кнопки вверху)
+local TabBar = Instance.new("Frame")
+TabBar.Size = UDim2.new(1, 0, 0, 40)
+TabBar.Position = UDim2.new(0, 0, 0, 40)
+TabBar.BackgroundColor3 = Color3.fromRGB(14, 14, 32)
+TabBar.BorderSizePixel = 0
+TabBar.Parent = MainFrame
 
-CreateSection(DigTab, "Method 2 - Event Fire")
-CreateToggle(DigTab, "Auto Dig (Events)", false, function(val)
+-- Контейнер для содержимого вкладок
+local ContentContainer = Instance.new("ScrollingFrame")
+ContentContainer.Size = UDim2.new(1, -10, 1, -90)
+ContentContainer.Position = UDim2.new(0, 5, 0, 85)
+ContentContainer.BackgroundColor3 = Color3.fromRGB(20, 20, 40)
+ContentContainer.BorderSizePixel = 0
+ContentContainer.ScrollBarThickness = 5
+ContentContainer.Parent = MainFrame
+
+local tabButtons = {} -- храним кнопки
+local tabContents = {} -- храним фреймы для каждой вкладки
+
+local function switchTab(tabName)
+    for name, frame in pairs(tabContents) do
+        frame.Visible = (name == tabName)
+    end
+    for name, btn in pairs(tabButtons) do
+        btn.BackgroundColor3 = (name == tabName) and Color3.fromRGB(60, 80, 180) or Color3.fromRGB(30, 30, 50)
+        btn.TextColor3 = (name == tabName) and Color3.fromRGB(255, 255, 255) or Color3.fromRGB(180, 180, 200)
+    end
+end
+
+local function createTab(name)
+    local btn = Instance.new("TextButton")
+    btn.Size = UDim2.new(0, 120, 0, 35)
+    btn.Position = UDim2.new(0, 5 + #tabButtons * 125, 0, 2.5)
+    btn.BackgroundColor3 = Color3.fromRGB(30, 30, 50)
+    btn.Text = name
+    btn.TextColor3 = Color3.fromRGB(180, 180, 200)
+    btn.TextSize = 14
+    btn.Font = Enum.Font.GothamSemibold
+    btn.Parent = TabBar
+    tabButtons[name] = btn
+
+    local contentFrame = Instance.new("Frame")
+    contentFrame.Size = UDim2.new(1, 0, 1, 0)
+    contentFrame.BackgroundTransparency = 1
+    contentFrame.Visible = false
+    contentFrame.Parent = ContentContainer
+    tabContents[name] = contentFrame
+
+    btn.MouseButton1Click:Connect(function()
+        switchTab(name)
+    end)
+
+    return contentFrame
+end
+
+-- Простая утилита для создания UI-элементов
+local function addSection(parent, text)
+    local section = Instance.new("TextLabel")
+    section.Size = UDim2.new(1, 0, 0, 25)
+    section.BackgroundTransparency = 1
+    section.Text = text
+    section.TextColor3 = Color3.fromRGB(140, 160, 255)
+    section.TextSize = 14
+    section.Font = Enum.Font.GothamBold
+    section.TextXAlignment = Enum.TextXAlignment.Left
+    section.Parent = parent
+    return section
+end
+
+local function addToggle(parent, text, default, callback)
+    local frame = Instance.new("Frame")
+    frame.Size = UDim2.new(1, 0, 0, 35)
+    frame.BackgroundColor3 = Color3.fromRGB(22, 22, 40)
+    frame.BorderSizePixel = 0
+    frame.Parent = parent
+
+    local label = Instance.new("TextLabel")
+    label.Size = UDim2.new(1, -50, 1, 0)
+    label.Position = UDim2.new(0, 10, 0, 0)
+    label.BackgroundTransparency = 1
+    label.Text = text
+    label.TextColor3 = Color3.fromRGB(200, 200, 220)
+    label.TextSize = 14
+    label.Font = Enum.Font.Gotham
+    label.TextXAlignment = Enum.TextXAlignment.Left
+    label.Parent = frame
+
+    local toggleBtn = Instance.new("TextButton")
+    toggleBtn.Size = UDim2.new(0, 40, 0, 25)
+    toggleBtn.Position = UDim2.new(1, -50, 0.5, -12.5)
+    toggleBtn.BackgroundColor3 = default and Color3.fromRGB(80, 120, 255) or Color3.fromRGB(50, 50, 70)
+    toggleBtn.Text = default and "ON" or "OFF"
+    toggleBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+    toggleBtn.TextSize = 12
+    toggleBtn.Font = Enum.Font.GothamSemibold
+    toggleBtn.Parent = frame
+
+    local state = default
+    toggleBtn.MouseButton1Click:Connect(function()
+        state = not state
+        toggleBtn.BackgroundColor3 = state and Color3.fromRGB(80, 120, 255) or Color3.fromRGB(50, 50, 70)
+        toggleBtn.Text = state and "ON" or "OFF"
+        callback(state)
+    end)
+    return frame
+end
+
+local function addButton(parent, text, callback)
+    local btn = Instance.new("TextButton")
+    btn.Size = UDim2.new(1, 0, 0, 35)
+    btn.BackgroundColor3 = Color3.fromRGB(60, 80, 200)
+    btn.Text = text
+    btn.TextColor3 = Color3.fromRGB(255, 255, 255)
+    btn.TextSize = 14
+    btn.Font = Enum.Font.GothamSemibold
+    btn.Parent = parent
+    btn.MouseButton1Click:Connect(callback)
+    return btn
+end
+
+local function addInput(parent, placeholder, callback)
+    local input = Instance.new("TextBox")
+    input.Size = UDim2.new(1, 0, 0, 30)
+    input.BackgroundColor3 = Color3.fromRGB(35, 35, 55)
+    input.Text = ""
+    input.PlaceholderText = placeholder
+    input.TextColor3 = Color3.fromRGB(255, 255, 255)
+    input.PlaceholderColor3 = Color3.fromRGB(120, 120, 140)
+    input.TextSize = 14
+    input.Font = Enum.Font.Gotham
+    input.Parent = parent
+    input.FocusLost:Connect(function()
+        callback(input.Text)
+    end)
+    return input
+end
+
+-- Создаем все вкладки
+local digTab = createTab("Auto Dig")
+local sellTab = createTab("Auto Sell")
+local favTab = createTab("Auto Favorite")
+local weightTab = createTab("Fav by Weight")
+local buyTab = createTab("Buy Tool")
+local tpTab = createTab("Teleport")
+local merchTab = createTab("Merchant")
+
+-- ===== Заполняем вкладки =====
+
+-- DigTab
+addSection(digTab, "Method 1 - Bar Follow")
+addToggle(digTab, "Bar Follow Line", false, function(val) autoDigBarMethod = val end)
+
+addSection(digTab, "Method 2 - Event Fire")
+addToggle(digTab, "Auto Dig (Events)", false, function(val)
     autoDigEventMethod = val
     if val then
         task.spawn(function()
@@ -735,69 +383,64 @@ CreateToggle(DigTab, "Auto Dig (Events)", false, function(val)
     end
 end)
 
-CreateSlider(DigTab, "Event Loop Delay", 0.1, 1, 0.5, 0.1, function(val)
-    eventDelay = val
+addSection(digTab, "Event Loop Delay (s)")
+local delayInput = addInput(digTab, "Current: 0.5", function(val)
+    local num = tonumber(val)
+    if num then eventDelay = num end
 end)
+delayInput.Text = "0.5"
 
-CreateSection(DigTab, "Method 3 - Targeted Dig")
-CreateToggle(DigTab, "Target: Legendary", false, function(val)
-    targetRarities["Legendary"] = val
-end)
-CreateToggle(DigTab, "Target: Mythic", false, function(val)
-    targetRarities["Mythic"] = val
-end)
-CreateToggle(DigTab, "Target: Exotic", false, function(val)
-    targetRarities["Exotic"] = val
-end)
+addSection(digTab, "Method 3 - Targeted Dig")
+addToggle(digTab, "Target: Legendary", false, function(val) targetRarities["Legendary"] = val end)
+addToggle(digTab, "Target: Mythic", false, function(val) targetRarities["Mythic"] = val end)
+addToggle(digTab, "Target: Exotic", false, function(val) targetRarities["Exotic"] = val end)
 
-CreateSlider(DigTab, "Worker Count", 1, 10, 3, 1, function(val)
-    workerCount = val
+addSection(digTab, "Worker Count")
+local workerInput = addInput(digTab, "Current: 3", function(val)
+    local num = tonumber(val)
+    if num then workerCount = num end
 end)
+workerInput.Text = "3"
 
-CreateToggle(DigTab, "Targeted Dig", false, function(val)
+addToggle(digTab, "Targeted Dig", false, function(val)
     autoTargetDig = val
-    if val then
-        spawnWorkers()
-    end
+    if val then spawnWorkers() end
 end)
 
--- Auto Sell Tab
-local SellTab = CreateTab("Auto Sell")
-CreateSection(SellTab, "Auto Sell")
-CreateToggle(SellTab, "Auto Sell", false, function(val)
+-- SellTab
+addSection(sellTab, "Auto Sell")
+addToggle(sellTab, "Auto Sell", false, function(val)
     autoSell = val
     if val then
         task.spawn(function()
             while autoSell do
-                pcall(function()
-                    Network.Merchant.packets.SellAll.send()
-                end)
+                pcall(function() Network.Merchant.packets.SellAll.send() end)
                 task.wait(sellDelay)
             end
         end)
     end
 end)
 
-CreateSlider(SellTab, "Sell Delay (s)", 10, 60, 30, 5, function(val)
-    sellDelay = val
+addSection(sellTab, "Sell Delay (s)")
+local sellDelayInput = addInput(sellTab, "Current: 30", function(val)
+    local num = tonumber(val)
+    if num then sellDelay = num end
 end)
+sellDelayInput.Text = "30"
 
--- Auto Favorite Tab
-local FavTab = CreateTab("Auto Favorite")
-CreateSection(FavTab, "Select Items to Favorite")
+-- FavoriteTab
+addSection(favTab, "Select Items to Favorite")
 for _, fishName in pairs(fishList) do
-    CreateToggle(FavTab, fishName, false, function(val)
-        favoritedItems[fishName] = val
-    end)
+    addToggle(favTab, fishName, false, function(val) favoritedItems[fishName] = val end)
 end
 
-CreateSection(FavTab, "Run")
-CreateButton(FavTab, "Favorite Selected Now", function()
+addSection(favTab, "Run")
+addButton(favTab, "Favorite Selected Now", function()
     favoriteAll()
-    ShowNotification("Auto Favorite", "Favorited all selected items in backpack!", 2)
+    warn("Favorited selected items!")
 end)
 
-CreateToggle(FavTab, "Auto Favorite on Backpack Change", false, function(val)
+addToggle(favTab, "Auto Favorite on Backpack Change", false, function(val)
     if val then
         lp.Backpack.ChildAdded:Connect(function()
             task.wait(0.1)
@@ -806,60 +449,49 @@ CreateToggle(FavTab, "Auto Favorite on Backpack Change", false, function(val)
     end
 end)
 
--- Fav by Weight Tab
-local WeightTab = CreateTab("Fav by Weight")
-CreateSection(WeightTab, "Add Weight Filter")
-CreateDropdown(WeightTab, "Select Item", fishList, function(val)
-    selectedWeightItem = val
+-- FavWeightTab
+addSection(weightTab, "Add Weight Filter")
+-- Простой выбор из списка: используем кнопки с перебором по порядковому номеру
+local itemIndex = 1
+addButton(weightTab, "Next Item: " .. fishList[itemIndex], function()
+    itemIndex = itemIndex + 1
+    if itemIndex > #fishList then itemIndex = 1 end
+    selectedWeightItem = fishList[itemIndex]
+    -- обновим текст на кнопке? но кнопка уже создана, проще добавить текстовую метку
 end)
 
-CreateInput(WeightTab, "Minimum Weight (kg)", "e.g. 50", function(val)
+local weightLabel = Instance.new("TextLabel")
+weightLabel.Size = UDim2.new(1, 0, 0, 20)
+weightLabel.BackgroundTransparency = 1
+weightLabel.Text = "Selected: " .. fishList[itemIndex]
+weightLabel.TextColor3 = Color3.fromRGB(200, 200, 220)
+weightLabel.Parent = weightTab
+
+local minWeightInputField = addInput(weightTab, "Min weight (kg)", function(val)
     minWeightInput = tonumber(val) or 0
 end)
 
-local FilterList = Instance.new("TextLabel")
-FilterList.Size = UDim2.new(1, 0, 0, 60)
-FilterList.BackgroundTransparency = 1
-FilterList.Text = "Active Filters:\nNone"
-FilterList.TextColor3 = Color3.fromRGB(140, 160, 255)
-FilterList.TextSize = 13
-FilterList.Font = Enum.Font.Gotham
-FilterList.TextWrapped = true
-FilterList.Parent = WeightTab
-
-local function updateWeightList()
-    local lines = {}
-    for name, w in pairs(weightFilters) do
-        table.insert(lines, name .. " >= " .. w .. " kg")
-    end
-    FilterList.Text = "Active Filters:\n" .. (#lines > 0 and table.concat(lines, ", ") or "None")
-end
-
-CreateButton(WeightTab, "Add Filter", function()
+addButton(weightTab, "Add Filter", function()
     if selectedWeightItem ~= "" and minWeightInput > 0 then
         weightFilters[selectedWeightItem] = minWeightInput
-        updateWeightList()
-        ShowNotification("Filter Added", selectedWeightItem .. " >= " .. minWeightInput .. " kg", 2)
-    else
-        ShowNotification("Error", "Select an item and enter a valid weight!", 2)
+        warn("Filter added: " .. selectedWeightItem .. " >= " .. minWeightInput)
     end
 end)
 
-CreateButton(WeightTab, "Remove Selected Filter", function()
+addButton(weightTab, "Remove Selected Filter", function()
     if weightFilters[selectedWeightItem] then
         weightFilters[selectedWeightItem] = nil
-        updateWeightList()
-        ShowNotification("Filter Removed", selectedWeightItem .. " filter removed.", 2)
+        warn("Filter removed")
     end
 end)
 
-CreateSection(WeightTab, "Run")
-CreateButton(WeightTab, "Favorite by Weight Now", function()
+addSection(weightTab, "Run")
+addButton(weightTab, "Favorite by Weight Now", function()
     favoriteByWeight()
-    ShowNotification("Auto Favorite", "Favorited items matching weight filters!", 2)
+    warn("Favorited by weight!")
 end)
 
-CreateToggle(WeightTab, "Auto Favorite by Weight on Change", false, function(val)
+addToggle(weightTab, "Auto Fav by Weight on Change", false, function(val)
     if val then
         lp.Backpack.ChildAdded:Connect(function()
             task.wait(0.1)
@@ -868,85 +500,87 @@ CreateToggle(WeightTab, "Auto Favorite by Weight on Change", false, function(val
     end
 end)
 
--- Buy Tool Tab
-local BuyTab = CreateTab("Buy Tool")
-CreateSection(BuyTab, "Select Tool to Buy")
-CreateDropdown(BuyTab, "Select Tool", equipList, function(val)
-    selectedBuyTool = val
+-- BuyTab
+addSection(buyTab, "Select Tool to Buy")
+-- Опять простой выбор через кнопку
+local toolIndex = 1
+addButton(buyTab, "Next Tool: " .. equipList[toolIndex], function()
+    toolIndex = toolIndex + 1
+    if toolIndex > #equipList then toolIndex = 1 end
+    selectedBuyTool = equipList[toolIndex]
 end)
 
-CreateButton(BuyTab, "Buy Tool", function()
+local buyLabel = Instance.new("TextLabel")
+buyLabel.Size = UDim2.new(1, 0, 0, 20)
+buyLabel.BackgroundTransparency = 1
+buyLabel.Text = "Selected: " .. equipList[toolIndex]
+buyLabel.TextColor3 = Color3.fromRGB(200, 200, 220)
+buyLabel.Parent = buyTab
+
+addButton(buyTab, "Buy Tool", function()
     if selectedBuyTool ~= "" then
-        pcall(function()
-            Network.Equipment.queries.Buy.invoke(selectedBuyTool)
-        end)
-        ShowNotification("Buy Tool", "Attempted to buy: " .. selectedBuyTool, 2)
-    else
-        ShowNotification("Error", "Please select a tool first!", 2)
+        pcall(function() Network.Equipment.queries.Buy.invoke(selectedBuyTool) end)
+        warn("Buying: " .. selectedBuyTool)
     end
 end)
 
--- Teleport Tab
-local TpTab = CreateTab("Teleport")
-CreateSection(TpTab, "Islands")
+-- TpTab
+addSection(tpTab, "Islands")
 for _, name in pairs(islandList) do
-    CreateButton(TpTab, name, function()
+    addButton(tpTab, name, function()
         teleportTo(name)
-        ShowNotification("Teleport", "Teleporting to " .. name, 2)
+        warn("Teleported to " .. name)
     end)
 end
 
--- Merchant Tab
-local MerchantTab = CreateTab("Merchant")
-CreateSection(MerchantTab, "Travelling Merchant")
-CreateButton(MerchantTab, "Check Merchant Status", function()
+-- MerchantTab
+addSection(merchTab, "Travelling Merchant")
+addButton(merchTab, "Check Status", function()
     pcall(function()
         local result = Network.TravellingMerchant.queries.GetShop.invoke()
         if result then
             local data = HttpService:JSONDecode(result)
             if data.isActive then
-                ShowNotification("Merchant", "Merchant is currently ACTIVE!", 3)
+                warn("Merchant ACTIVE!")
             else
                 local timeLeft = data.nextChangeTime - os.time()
-                local mins = math.floor(timeLeft / 60)
-                local secs = timeLeft % 60
-                ShowNotification("Merchant", "Arrives in: " .. mins .. "m " .. secs .. "s", 3)
+                warn("Arrives in " .. math.floor(timeLeft/60) .. "m")
             end
         end
     end)
 end)
 
-CreateButton(MerchantTab, "Buy All Now", function()
+addButton(merchTab, "Buy All Now", function()
     pcall(function()
         local result = Network.TravellingMerchant.queries.GetShop.invoke()
         if result then
             local data = HttpService:JSONDecode(result)
             if data.isActive then
                 task.spawn(buyAllMerchant)
-                ShowNotification("Merchant", "Buying all items!", 2)
+                warn("Buying all merchant items...")
             else
-                ShowNotification("Merchant", "Merchant is not active!", 2)
+                warn("Merchant not active")
             end
         end
     end)
 end)
 
-CreateToggle(MerchantTab, "Auto Buy When Merchant Arrives", false, function(val)
+addToggle(merchTab, "Auto Buy When Arrives", false, function(val)
     autoMerchant = val
     if val then
         task.spawn(function()
-            local merchantBought = false
+            local bought = false
             while autoMerchant do
                 pcall(function()
                     local result = Network.TravellingMerchant.queries.GetShop.invoke()
                     if result then
                         local data = HttpService:JSONDecode(result)
-                        if data.isActive and not merchantBought then
+                        if data.isActive and not bought then
                             buyAllMerchant()
-                            merchantBought = true
-                            ShowNotification("Merchant", "Bought all merchant items!", 3)
+                            bought = true
+                            warn("Bought all!")
                         elseif not data.isActive then
-                            merchantBought = false
+                            bought = false
                         end
                     end
                 end)
@@ -956,15 +590,10 @@ CreateToggle(MerchantTab, "Auto Buy When Merchant Arrives", false, function(val)
     end
 end)
 
--- Select first tab by default
-if Tabs[1] then
-    Tabs[1].Button.BackgroundColor3 = Color3.fromRGB(60, 80, 180)
-    Tabs[1].Button.TextColor3 = Color3.fromRGB(255, 255, 255)
-    Tabs[1].Content.Visible = true
-    CurrentTab = {Button = Tabs[1].Button, Content = Tabs[1].Content}
-end
+-- Выбираем первую вкладку по умолчанию
+switchTab("Auto Dig")
 
--- RenderStepped Connection (оригинальный код)
+-- Оригинальная связка с RenderStepped
 RunService.RenderStepped:Connect(function()
     if autoDigBarMethod and qte.Enabled then
         pcall(function()
@@ -976,4 +605,4 @@ RunService.RenderStepped:Connect(function()
     end
 end)
 
-ShowNotification("Diamond Hub", "Loaded successfully!", 3)
+print("Diamond Hub loaded for Solara!")
